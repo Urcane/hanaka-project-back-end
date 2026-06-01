@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS carts (
+    id VARCHAR(20) PRIMARY KEY,
+    user_id VARCHAR(20) DEFAULT NULL,
+    session_token VARCHAR(100) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_carts_user (user_id),
+    INDEX idx_carts_session (session_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
