@@ -1,8 +1,14 @@
 # Frontend Reference — Backend API Integration Guide
 
 > Dokumen ini adalah referensi lengkap untuk AI assistant yang bekerja di **frontend** Hanaka Cake.
-> Berisi semua detail backend API yang sudah diimplementasikan, mapping field frontend ↔ backend,
-> dan panduan step-by-step integrasi.
+> Berisi semua detail backend API yang sudah diimplementasikan, mapping field frontend ↔ backend.
+> Terakhir update: 2026-06-01
+
+---
+
+## Status: ✅ FULLY INTEGRATED
+
+Frontend sudah terhubung penuh ke backend. Tidak ada lagi localStorage untuk data utama.
 
 ---
 
@@ -14,8 +20,7 @@ Production:  https://api.hanakacake.com/api (TBD)
 ```
 
 Semua endpoint return JSON dengan format konsisten:
-
-```js
+```json
 // Success
 { "ok": true, "data...": ... }
 
@@ -28,16 +33,17 @@ Semua endpoint return JSON dengan format konsisten:
 ## 2. Authentication (JWT)
 
 ### Token Flow
-1. Register/Login → backend return `{ token: "eyJ..." }` 
-2. Simpan token di **memory** (state/variable), bukan localStorage
-3. Kirim token di setiap request: `Authorization: Bearer <token>`
-4. Token expired → response 401 → redirect ke login
-5. Logout → hapus token dari memory
+1. Register/Login → backend return `{ token: "eyJ..." }`
+2. Token disimpan di `localStorage` (`hanaka_auth_token`)
+3. `apiService.js` kirim token di setiap request: `Authorization: Bearer <token>`
+4. Token expired → response 401 → `apiGetMe()` gagal → `currentUser = null`
+5. Logout → hapus token dari localStorage
 
 ### Guest Session
-- Guest user diidentifikasi via **session token** (header `X-Session-Token`)
-- Generate session token saat pertama kali add to cart (jika belum login)
-- Simpan session token di state/localStorage
+- Guest diidentifikasi via **session token** (header `X-Session-Token`)
+- Token dibuat backend saat pertama kali add to cart (jika belum login)
+- Disimpan di `localStorage` (`hanaka_session_token`)
+- `apiService.js` kirim otomatis di setiap request jika ada
 - Saat login/register, kirim session token → backend auto merge guest cart
 
 ---
@@ -47,87 +53,64 @@ Semua endpoint return JSON dengan format konsisten:
 ### 3.1 Auth
 
 #### `POST /api/auth/register`
-```js
+```json
 // Request
 { "fullName": "Budi", "email": "budi@email.com", "phone": "081234567890", "password": "Pass1234", "confirmPassword": "Pass1234" }
 
 // Response 201
-{ "ok": true, "user": { "id": "usr_a1b2c3d4", "fullName": "Budi", "email": "budi@email.com", "phone": "081234567890", "role": "customer", "createdAt": "..." }, "token": "eyJ..." }
-
-// Error 400
-{ "ok": false, "error": "Data registrasi tidak valid.", "errors": { "email": "Masukkan format email yang valid." } }
-
-// Error 409
-{ "ok": false, "error": "Email ini sudah terdaftar. Silakan login.", "errors": { "email": "Email ini sudah terdaftar." } }
+{ "ok": true, "user": { "id": "usr_a1b2c3d4", "fullName": "Budi", "email": "...", "phone": "...", "role": "customer", "createdAt": "..." }, "token": "eyJ..." }
 ```
 
 #### `POST /api/auth/login`
-```js
+```json
 // Request
 { "email": "budi@email.com", "password": "Pass1234" }
 
 // Response 200
-{ "ok": true, "user": { "id": "usr_a1b2c3d4", "fullName": "Budi", ... }, "token": "eyJ..." }
+{ "ok": true, "user": { "id": "...", "role": "customer" | "admin", ... }, "token": "eyJ..." }
 
 // Error 401
 { "ok": false, "error": "Email atau password belum sesuai." }
 ```
 
 #### `POST /api/auth/logout` (Auth Required)
-```js
-// Response 200
+```json
 { "ok": true }
 ```
 
 #### `GET /api/auth/me` (Auth Required)
-```js
-// Response 200
-{ "ok": true, "user": { "id": "usr_a1b2c3d4", "fullName": "Budi", ... } }
-
-// Error 401
-{ "ok": false, "error": "Token tidak valid atau sudah expired." }
+```json
+{ "ok": true, "user": { "id": "...", "role": "...", ... } }
 ```
 
 ---
 
-### 3.2 Products (Public — No Auth)
+### 3.2 Products (Public)
 
-#### `GET /api/products`
-Query param: `?featured=true` (optional)
-
-```js
-// Response 200
+#### `GET /api/products` — `?featured=true` (optional)
+```json
 {
   "ok": true,
-  "products": [
-    {
-      "id": "black-forest",
-      "name": "Black Forest Cake",
-      "shortDescription": "Manis, lembut...",
-      "longDescription": "Tekstur lembut...",
-      "featured": true,
-      "coverGradient": "linear-gradient(135deg, #8a5a44 0%, #bc8b73 100%)",
-      "coverImage": "brownies.jpg",       // null jika tidak ada foto
-      "maxMessageLength": 60,
-      "sizes": [
-        { "id": "size-16-bf", "label": "16", "fullLabel": "Ukuran 16 cm", "price": 120000 },
-        { "id": "size-18-bf", "label": "18", "fullLabel": "Ukuran 18 cm", "price": 170000 },
-        { "id": "size-20-bf", "label": "20", "fullLabel": "Ukuran 20 cm", "price": 220000 },
-        { "id": "size-22-bf", "label": "22", "fullLabel": "Ukuran 22 cm", "price": 270000 }
-      ],
-      "startingPrice": 120000
-    }
-  ]
+  "products": [{
+    "id": "black-forest",
+    "name": "Black Forest Cake",
+    "shortDescription": "...",
+    "longDescription": "...",
+    "featured": true,
+    "coverGradient": "linear-gradient(135deg, #8a5a44 0%, #bc8b73 100%)",
+    "coverImage": "brownies.jpg",
+    "maxMessageLength": 60,
+    "sizes": [
+      { "id": "size-16-bf", "label": "16", "fullLabel": "Ukuran 16 cm", "price": 120000 }
+    ],
+    "startingPrice": 120000
+  }]
 }
 ```
 
 #### `GET /api/products/{productId}`
-```js
-// Response 200
+```json
 { "ok": true, "product": { ...sameAsAbove } }
-
-// Error 404
-{ "ok": false, "error": "Produk tidak ditemukan." }
 ```
 
 ---
@@ -135,46 +118,43 @@ Query param: `?featured=true` (optional)
 ### 3.3 Cart
 
 #### `GET /api/cart`
-```js
-// Headers: Authorization (optional) + X-Session-Token (for guest)
-// Response 200
+Header: `Authorization` (optional) + `X-Session-Token` (guest)
+```json
 {
   "ok": true,
-  "items": [
-    {
-      "id": "cart_m1n2o3p4",
-      "productId": "black-forest",
-      "productName": "Black Forest Cake",
-      "productDescription": "Manis, lembut...",
-      "productGradient": "linear-gradient(...)",
-      "productImage": "brownies.jpg",
-      "size": { "id": "size-18-bf", "label": "18", "fullLabel": "Ukuran 18 cm", "price": 170000 },
-      "colorText": "Merah Muda",
-      "theme": "Roblox",
-      "message": "Happy Birthday",
-      "quantity": 2,
-      "unitPrice": 170000,
-      "totalPrice": 340000
-    }
-  ],
+  "items": [{
+    "id": "cart_m1n2o3p4",
+    "productId": "black-forest",
+    "productName": "Black Forest Cake",
+    "productDescription": "...",
+    "productGradient": "linear-gradient(...)",
+    "productImage": "brownies.jpg",
+    "size": { "id": "size-18-bf", "label": "18", "fullLabel": "Ukuran 18 cm", "price": 170000 },
+    "colorText": "Merah Muda",
+    "theme": "Ulang Tahun",
+    "message": "Happy Birthday",
+    "quantity": 2,
+    "unitPrice": 170000,
+    "totalPrice": 340000
+  }],
   "subtotal": 340000,
   "itemCount": 2
 }
 ```
 
 #### `POST /api/cart/items`
-```js
+```json
 // Request
-{ "productId": "black-forest", "sizeId": "size-18-bf", "colorText": "Merah Muda", "theme": "Roblox", "message": "Happy Birthday", "quantity": 2 }
+{ "productId": "black-forest", "sizeId": "size-18-bf", "colorText": "Merah Muda", "theme": "Ulang Tahun", "message": "Happy Birthday", "quantity": 2 }
 
 // Response 201
 { "ok": true, "item": { ...cartItem }, "sessionToken": "abc123..." }
-// sessionToken hanya dikembalikan saat guest pertama kali add item — simpan ini!
+// sessionToken hanya dikembalikan saat guest pertama kali add item
 ```
 
 #### `PUT /api/cart/items/{itemId}`
-```js
-// Request (update seluruh item, productId tetap)
+```json
+// Request
 { "sizeId": "size-20-bf", "colorText": "Biru", "theme": "Frozen", "message": "Selamat", "quantity": 1 }
 
 // Response 200
@@ -182,42 +162,29 @@ Query param: `?featured=true` (optional)
 ```
 
 #### `PATCH /api/cart/items/{itemId}/quantity`
-```js
-// Request
+```json
 { "quantity": 3 }
-
-// Response 200
-{ "ok": true, "item": { ...updatedItem } }
 ```
 
-#### `DELETE /api/cart/items/{itemId}`
-```js
-// Response 200
-{ "ok": true }
-```
-
-#### `DELETE /api/cart`
-```js
-// Response 200 — Clear all items
-{ "ok": true }
-```
+#### `DELETE /api/cart/items/{itemId}` → `{ "ok": true }`
+#### `DELETE /api/cart` → `{ "ok": true }`
 
 ---
 
 ### 3.4 Orders
 
 #### `POST /api/orders`
-```js
+```json
 // Request
 {
   "customerName": "Budi Santoso",
   "phone": "081234567890",
-  "pickupMethod": "pickup",          // "pickup" | "delivery"
-  "pickupDate": "2026-05-25",        // required if pickup
-  "pickupTime": "14:00",             // required if pickup
-  "address": "",                      // required if delivery, max 220
-  "addressNote": "",                  // optional, max 120
-  "paymentMethod": "qris"            // "cash" | "qris"
+  "pickupMethod": "pickup" | "delivery",
+  "pickupDate": "2026-06-05",     // required jika pickup
+  "pickupTime": "14:00",          // required jika pickup
+  "address": "",                   // required jika delivery, max 220
+  "addressNote": "",              // optional, max 120
+  "paymentMethod": "cash" | "qris"
 }
 
 // Response 201
@@ -225,51 +192,33 @@ Query param: `?featured=true` (optional)
   "ok": true,
   "order": {
     "id": "ord_q1r2s3t4",
-    "orderNumber": "HNK-20260522-143052-847",
-    "userId": "usr_a1b2c3d4",        // null untuk guest
-    "customerName": "Budi Santoso",
-    "customerPhone": "081234567890",
-    "fulfillmentMethod": "pickup",
-    "pickupDate": "2026-05-25",
-    "pickupTime": "14:00",
+    "orderNumber": "HNK-20260601-143213-348",
+    "userId": "usr_xxx" | null,
+    "customerName": "...",
+    "customerPhone": "...",
+    "fulfillmentMethod": "pickup" | "delivery",
+    "pickupDate": "2026-06-05",
+    "pickupTime": "14:00:00",
     "deliveryAddress": null,
     "addressNote": "",
     "paymentMethod": "qris",
-    "paymentStatus": "pending",       // "pending" | "paid" | "cod"
+    "paymentStatus": "pending" | "cod",
     "status": "menunggu konfirmasi",
     "items": [ ...orderItems ],
-    "totalPrice": 340000,
-    "createdAt": "2026-05-22T07:30:00"
+    "totalPrice": 170000,
+    "createdAt": "2026-06-01T14:32:13"
   }
 }
-
-// Error 400
-{ "ok": false, "error": "Keranjang masih kosong." }
 ```
 
 #### `GET /api/orders` (Auth Required)
-```js
-// Response 200
+```json
 { "ok": true, "orders": [ ...orderObjects ] }
 ```
 
 #### `GET /api/orders/{orderId}`
-```js
-// Response 200
+```json
 { "ok": true, "order": { ...orderObject } }
-
-// Error 404
-{ "ok": false, "error": "Order tidak ditemukan." }
-```
-
-#### `PATCH /api/orders/{orderId}/pay`
-```js
-// Response 200 — Mark QRIS order as paid
-{ "ok": true, "order": { ...updatedOrder, "paymentStatus": "paid", "status": "diproses" } }
-
-// Error 400
-{ "ok": false, "error": "Order ini bukan pembayaran QRIS." }
-{ "ok": false, "error": "Order ini sudah dibayar." }
 ```
 
 ---
@@ -277,31 +226,42 @@ Query param: `?featured=true` (optional)
 ### 3.5 Payment
 
 #### `POST /api/payments/qris`
-```js
+```json
 // Request
 { "orderId": "ord_q1r2s3t4" }
 
-// Response 201
+// Response 201 (QR baru) atau 200 (reuse QR valid)
 {
   "ok": true,
   "payment": {
     "orderId": "ord_q1r2s3t4",
-    "orderNumber": "HNK-20260522-143052-847",
-    "amount": 340000,
-    "qrString": "HANAKA-CAKE|ORDER:HNK-20260522-143052-847|TOTAL:340000|NAME:Budi",
-    "expiresAt": "2026-05-22T08:00:00+08:00",
+    "orderNumber": "HNK-20260601-143213-348",
+    "amount": 170000,
+    "qrString": "00020101021226620014COM.GO-JEK...",
+    "qrImageUrl": "https://api.sandbox.midtrans.com/v2/qris/.../qr-code",
+    "expiresAt": "2026-06-01T12:41:08+00:00",
     "status": "pending"
   }
 }
 ```
+
+#### `GET /api/payments/qris/status?orderId={orderId}`
+```json
+{
+  "ok": true,
+  "status": "pending" | "paid" | "expired" | "failed",
+  "order": { ...orderObject }
+}
+```
+
+#### `POST /api/payments/webhook` — dari Midtrans, selalu return 200
 
 ---
 
 ### 3.6 Store
 
 #### `GET /api/store/profile`
-```js
-// Response 200
+```json
 {
   "ok": true,
   "store": {
@@ -316,198 +276,33 @@ Query param: `?featured=true` (optional)
 
 ---
 
-## 4. Field Mapping: Frontend ↔ Backend
-
-### User
-| Frontend (localStorage) | Backend (API Response) | Perubahan |
-|---|---|---|
-| `user.fullName` | `user.fullName` | Sama |
-| `user.email` | `user.email` | Sama |
-| `user.phone` | `user.phone` | Sama |
-| `user.password` (plain text!) | Tidak di-return | Backend hash bcrypt |
-| `sessionUserId` (localStorage) | JWT token (memory) | **Ganti mekanisme** |
-
-### Product
-| Frontend (`products.js`) | Backend (`GET /api/products`) | Perubahan |
-|---|---|---|
-| `product.shortDescription` | `product.shortDescription` | Sama |
-| `product.sizes[].id` → `"size-16"` | `product.sizes[].id` → `"size-16-bf"` | **ID berbeda (include product suffix)** |
-| `product.coverImage` (import static) | `product.coverImage` → filename string | **Perlu mapping ke asset** |
-| Hardcoded di `products.js` | Fetch dari API | **Ubah ke async** |
-
-### Cart Item
-| Frontend (localStorage) | Backend (API Response) | Perubahan |
-|---|---|---|
-| `item.size.price` | `item.size.price` | Sama |
-| `item.productDescription` | `item.productDescription` | Sama |
-| `item.productGradient` | `item.productGradient` | Sama |
-| Cart key `__guest__` | Session token (header) | **Ganti mekanisme** |
-| `cartsByUser` object | Backend manages | **Hapus state lokal** |
-
-### Order
-| Frontend (localStorage) | Backend (API Response) | Perubahan |
-|---|---|---|
-| `order.fulfillmentMethod` | `order.fulfillmentMethod` | Sama |
-| `order.deliveryAddress` | `order.deliveryAddress` | Sama |
-| `order.items[]` (full cart items) | `order.items[]` (snapshot) | **items di backend = snapshot** |
-| `order.paymentStatus` | `order.paymentStatus` | Sama |
-| `order.status` | `order.status` | Sama |
-
----
-
-## 5. Key Differences to Handle
-
-### 5.1 Size ID Format Changed
-```
-Frontend sekarang: "size-16", "size-18", "size-20", "size-22"
-Backend:          "size-16-bf", "size-18-rv", "size-16-vc", dll.
-```
-**Solusi**: Gunakan size ID dari API response, bukan hardcode.
-
-### 5.2 Product Images
-```
-Frontend: import browniesImg from '../assets/brownies.jpg'
-Backend:  product.coverImage = "brownies.jpg" (string)
-```
-**Solusi**: Mapping di frontend, atau serve images via backend static folder.
-
-### 5.3 Guest Cart Identity
-```
-Frontend sekarang: cartsByUser['__guest__']
-Backend:          X-Session-Token header / session_token cookie
-```
-**Solusi**: Simpan session token saat pertama add to cart (returned in response).
-
-### 5.4 Async Operations
-```
-Frontend sekarang: Synchronous state updates
-Backend:          Async fetch() → loading states needed
-```
-**Solusi**: Tambahkan `isLoading`, `error` state di context.
-
----
-
-## 6. Suggested `apiService.js`
+## 4. apiService.js — Base Fetch Wrapper
 
 ```js
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
 
-let authToken = null
+let authToken = localStorage.getItem('hanaka_auth_token') || null
 let sessionToken = localStorage.getItem('hanaka_session_token') || null
 
-export function setAuthToken(token) { authToken = token }
-export function clearAuthToken() { authToken = null }
-export function getSessionToken() { return sessionToken }
-export function setSessionToken(token) {
-  sessionToken = token
-  localStorage.setItem('hanaka_session_token', token)
-}
-
-async function request(method, path, body = null) {
-  const headers = { 'Content-Type': 'application/json' }
-
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`
-  }
-  if (sessionToken) {
-    headers['X-Session-Token'] = sessionToken
-  }
-
-  const options = { method, headers }
-  if (body) options.body = JSON.stringify(body)
-
-  const res = await fetch(`${API_BASE}${path}`, options)
-  const data = await res.json()
-
-  if (!res.ok) {
-    const error = new Error(data.error || 'Terjadi kesalahan.')
-    error.status = res.status
-    error.errors = data.errors || {}
-    throw error
-  }
-
-  return data
-}
-
-export const api = {
-  get:    (path) => request('GET', path),
-  post:   (path, body) => request('POST', path, body),
-  put:    (path, body) => request('PUT', path, body),
-  patch:  (path, body) => request('PATCH', path, body),
-  delete: (path) => request('DELETE', path),
-}
+// Headers otomatis di semua request:
+// - Content-Type: application/json
+// - Authorization: Bearer <token>  (jika ada)
+// - X-Session-Token: <token>       (jika ada)
+// - ngrok-skip-browser-warning: true  (bypass ngrok interstitial)
 ```
 
 ---
 
-## 7. Migration Checklist
-
-### Phase 1: API Service + Products (Safest Start)
-```
-□ Buat src/services/apiService.js (fetch wrapper + token management)
-□ Buat src/services/productsApi.js
-□ Ganti products dari hardcoded → fetch GET /api/products
-□ Tambah loading state untuk products
-□ Update product image mapping (coverImage string → import)
-□ Size ID sekarang pakai format baru (size-16-bf)
-```
-
-### Phase 2: Auth
-```
-□ Buat src/services/authApi.js
-□ Update registerAccount → POST /api/auth/register
-□ Update loginAccount → POST /api/auth/login
-□ Update logoutAccount → clear token
-□ Tambahkan auth restore (GET /api/auth/me saat app mount)
-□ Hapus users array dari localStorage
-□ Hapus password plain text storage
-```
-
-### Phase 3: Cart
-```
-□ Buat src/services/cartApi.js
-□ Update addToCart → POST /api/cart/items
-□ Update editCartItem → PUT /api/cart/items/{id}
-□ Update updateCartQuantity → PATCH /api/cart/items/{id}/quantity
-□ Update removeCartItem → DELETE /api/cart/items/{id}
-□ Update clearCart → DELETE /api/cart
-□ Handle sessionToken untuk guest cart
-□ Hapus cartsByUser dari localStorage
-```
-
-### Phase 4: Orders + Payment
-```
-□ Buat src/services/ordersApi.js
-□ Update placeOrder → POST /api/orders
-□ Update order list → GET /api/orders
-□ Update getOrderById → GET /api/orders/{id}
-□ Update markPaid → PATCH /api/orders/{id}/pay
-□ Update QRIS → POST /api/payments/qris (get qrString, generate QR locally)
-□ Hapus orders dari localStorage
-```
-
-### Phase 5: Cleanup
-```
-□ Hapus src/services/storageService.js
-□ Hapus src/data/products.js (data dari API)
-□ Hapus localStorage keys hanaka_*_v1
-□ Update .env → tambah VITE_API_URL
-□ Update claude.md
-```
-
----
-
-## 8. Error Handling Pattern
+## 5. Error Handling Pattern
 
 ```js
 try {
   const data = await api.post('/auth/login', { email, password })
-  // success
 } catch (err) {
   if (err.status === 401) {
     setFormError('Email atau password belum sesuai.')
   } else if (err.status === 400 && err.errors) {
-    setFieldErrors(err.errors)  // { email: "...", password: "..." }
+    setFieldErrors(err.errors)  // { fieldName: "Pesan error" }
   } else {
     setFormError('Terjadi kesalahan. Silakan coba lagi.')
   }
@@ -516,21 +311,29 @@ try {
 
 ---
 
-## 9. Env Configuration
+## 6. CORS
 
-### `.env` (Frontend)
-```env
-VITE_API_URL=http://localhost:8080/api
+Backend mengizinkan request dari `http://localhost:5173` (Vite dev server).
+
+**Penting**: Sumber kebenaran CORS ada di `src/Application/ResponseEmitter/ResponseEmitter.php`
+(bukan `CorsMiddleware`) — dieksekusi terakhir dan override semua header.
+
+Header yang diizinkan:
+```
+Access-Control-Allow-Headers: X-Requested-With, Content-Type, Accept, Origin,
+                               Authorization, X-Session-Token, ngrok-skip-browser-warning
 ```
 
-### `.env.production`
-```env
-VITE_API_URL=https://api.hanakacake.com/api
-```
+Jika kena CORS error:
+1. Pastikan backend jalan dan `CORS_ALLOWED_ORIGIN=http://localhost:5173` di `.env`
+2. Restart backend setelah ubah `.env`
+3. `ngrok-skip-browser-warning` sudah diizinkan — tidak perlu tindakan tambahan
 
 ---
 
-## 10. CORS Note
+## 7. Env Frontend
 
-Backend sudah dikonfigurasi untuk menerima request dari `http://localhost:5173` (Vite dev server).
-Jika frontend berjalan di port/domain lain, update `CORS_ALLOWED_ORIGIN` di backend `.env`.
+```env
+# hanaka-project/.env
+VITE_API_URL=http://localhost:8080/api
+```

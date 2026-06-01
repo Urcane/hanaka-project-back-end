@@ -1,6 +1,13 @@
 # Frontend — Products & Catalog
 
-> Data produk, model query, dan cara produk ditampilkan.
+> Data produk, cara fetch dari API, dan cara produk ditampilkan.
+> Terakhir update: 2026-06-01
+
+---
+
+## Status: ✅ Data dari API
+
+Produk sudah fetch dari `GET /api/products` — bukan lagi dari `products.js` hardcoded.
 
 ---
 
@@ -16,106 +23,87 @@
 | `lemon-cake` | Lemon Cake | ❌ | — (gradient) | `#f5e6a3 → #e8d77b` |
 | `rainbow-cake` | Rainbow Cake | ❌ | — (gradient) | `#f5a3a3 → #a3d5f5 → #a3f5c4` |
 
-### 4 Ukuran Standar (Semua Produk Sama)
+### 4 Ukuran per Produk (Size ID include product code)
 
-| Size ID | Label | Full Label | Harga |
-|---|---|---|---|
-| `size-16` | 16 | Ukuran 16 cm | Rp 120.000 |
-| `size-18` | 18 | Ukuran 18 cm | Rp 170.000 |
-| `size-20` | 20 | Ukuran 20 cm | Rp 220.000 |
-| `size-22` | 22 | Ukuran 22 cm | Rp 270.000 |
+| Size ID | Label | Harga |
+|---|---|---|
+| `size-16-bf` | 16 cm | Rp 120.000 |
+| `size-18-bf` | 18 cm | Rp 170.000 |
+| `size-20-bf` | 20 cm | Rp 220.000 |
+| `size-22-bf` | 22 cm | Rp 270.000 |
 
-### Max Message Length
-- Semua produk: **60 karakter**
+> Pattern: `size-{cm}-{code}` — `bf` = black-forest, `rv` = red-velvet, `vc` = vanilla-cake, `lc` = lemon-cake, `rc` = rainbow-cake
 
 ---
 
-## Data Structure
+## Data Fetch
 
-### Product Object
+```js
+// AppContext.jsx — useEffect on mount
+fetchProducts()  // GET /api/products
+  .then(data => setProducts(data))
+  .finally(() => setIsLoadingProducts(false))
+```
+
+### Product Object dari API
 ```js
 {
   id: 'black-forest',
   name: 'Black Forest Cake',
-  shortDescription: '...',          // Untuk card di menu/home
-  longDescription: '...',           // Untuk halaman detail
-  featured: true,                   // Tampil di best seller
+  shortDescription: '...',
+  longDescription: '...',
+  featured: true,
   coverGradient: 'linear-gradient(135deg, #8a5a44 0%, #bc8b73 100%)',
-  sizes: [                          // Referensi ke standardSizes
-    { id: 'size-16', label: '16', fullLabel: 'Ukuran 16 cm', price: 120000 },
+  coverImage: 'brownies.jpg',     // null jika tidak ada foto
+  maxMessageLength: 60,
+  sizes: [
+    { id: 'size-16-bf', label: '16', fullLabel: 'Ukuran 16 cm', price: 120000 },
+    { id: 'size-18-bf', label: '18', fullLabel: 'Ukuran 18 cm', price: 170000 },
     ...
   ],
-  maxMessageLength: 60,
+  startingPrice: 120000
 }
 ```
-
-### Store Profile
-```js
-{
-  name: 'Hanaka Cake',
-  address: 'Jl. DR. Sukono Rt 09 No 11, Karang Rejo, Balikpapan Kota, Kalimantan Timur. 76124',
-  operationalHours: '07.00 AM - 11.00 PM',
-  pickupInfo: 'Pengambilan tersedia setiap hari, 07.00 - 23.00 WITA',
-  whatsappNumber: '6281299998888',
-  whatsappLabel: '0812-9999-8888',
-  instagramHandle: 'hanakacake.id',
-}
-```
-
----
-
-## Product Model Functions (`src/models/productModel.js`)
-
-| Function | Return | Keterangan |
-|---|---|---|
-| `getAllProducts()` | `Product[]` | Semua produk dari katalog |
-| `getFeaturedProducts()` | `Product[]` | Produk dengan `featured: true` |
-| `findProductById(id)` | `Product \| null` | Cari produk by ID |
-| `findSizeOption(product, sizeId)` | `SizeOption \| null` | Cari size dalam produk |
-| `getProductStartingPrice(product)` | `number` | Harga termurah (min dari sizes) |
-| `calculateUnitPrice(product, sizeId)` | `number` | Harga untuk size tertentu |
-
----
-
-## Display Logic
-
-### HomePage (Best Seller)
-- Filter `featured: true` → tampil di grid "Best Seller"
-- Hanya produk dengan foto (`productImages[product.id]`) yang tampil gambar
-- Link "See More" → `/menu`
-
-### MenuPage
-- Tampilkan semua produk dalam grid
-- Panel "Daftar Harga" di atas
-- Produk tanpa foto → tampilkan div dengan `coverGradient` sebagai background
-- Klik produk → navigate ke `/menu/:productId`
-
-### CustomizeCakePage
-- Load produk berdasarkan `useParams().productId`
-- Jika produk tidak ditemukan → tampil pesan error + link ke menu
-- Produk dengan foto → `<img>`, tanpa foto → gradient div
 
 ---
 
 ## Image Mapping
 
+Backend mengembalikan `coverImage` sebagai string filename (e.g. `"brownies.jpg"`).
+Frontend memetakan ke static import:
+
 ```js
-const productImages = {
-  'black-forest': browniesImg,    // src/assets/brownies.jpg
-  'red-velvet': strawberryImg,    // src/assets/strawberry-cake.jpg
+// src/utils/productImages.js
+import browniesImg from '../assets/brownies.jpg'
+import strawberryImg from '../assets/strawberry-cake.jpg'
+
+export const productImages = {
+  'black-forest': browniesImg,
+  'red-velvet': strawberryImg,
 }
 ```
 
-Produk lain (vanilla, lemon, rainbow) belum punya foto → pakai CSS gradient.
+Produk tanpa foto → tampilkan div dengan CSS `coverGradient`.
+
+---
+
+## Product Model Functions (`src/models/productModel.js`)
+
+| Function | Keterangan |
+|---|---|
+| `getFeaturedProducts(products)` | Filter `featured: true` dari array |
+| `findProductById(products, id)` | Cari produk by ID |
+| `findSizeOption(product, sizeId)` | Cari size dalam produk |
+| `getProductStartingPrice(product)` | Harga termurah |
+| `calculateUnitPrice(product, sizeId)` | Harga untuk size tertentu |
 
 ---
 
 ## File Terkait
 
-- `src/data/products.js` — Data statis (cakeCatalog, standardSizes, storeProfile)
-- `src/models/productModel.js` — Query functions
-- `src/pages/HomePage.jsx` — Best seller display
+- `src/services/productsApi.js` — `fetchProducts()`, `fetchProductById()`
+- `src/models/productModel.js` — Query & filter functions
+- `src/utils/productImages.js` — Mapping coverImage filename → static import
+- `src/pages/HomePage.jsx` — Best seller (featured products)
 - `src/pages/MenuPage.jsx` — Full catalog
-- `src/pages/CustomizeCakePage.jsx` — Detail + form
-- `src/assets/brownies.jpg` — Foto Black Forest
-- `src/assets/strawberry-cake.jpg` — Foto Red Velvet
+- `src/pages/CustomizeCakePage.jsx` — Detail + form kustomisasi

@@ -1,6 +1,7 @@
 # Backend — Security Requirements
 
-> Checklist keamanan dan best practices untuk backend.
+> Checklist keamanan dan status implementasi.
+> Terakhir update: 2026-06-01
 
 ---
 
@@ -8,132 +9,78 @@
 
 ### Authentication & Authorization
 
-- [ ] Password hashing: `password_hash($pw, PASSWORD_BCRYPT, ['cost' => 12])`
-- [ ] Password verification: `password_verify($input, $hash)`
-- [ ] JWT secret minimal 32 karakter (random, dari env)
-- [ ] JWT expiry reasonable (24 jam default)
-- [ ] Tidak return `password_hash` di response apapun
-- [ ] Rate limiting pada `/api/auth/login` dan `/api/auth/register`
-- [ ] User hanya bisa akses data miliknya (order, cart)
-- [ ] Guest session token memiliki expiry
+- [x] Password hashing: `password_hash($pw, PASSWORD_BCRYPT, ['cost' => 12])`
+- [x] Password verification: `password_verify($input, $hash)`
+- [x] JWT secret minimal 32 karakter (random, dari env)
+- [x] JWT expiry reasonable (24 jam default)
+- [x] Tidak return `password_hash` di response apapun
+- [ ] Rate limiting pada `/api/auth/login` dan `/api/auth/register` ← **BELUM**
+- [x] User hanya bisa akses data miliknya (order, cart)
+- [x] Role-based access (customer/admin) via JWT claim + AdminMiddleware
+- [ ] Guest session token memiliki expiry ← **BELUM**
 
 ### Input Validation
 
-- [ ] Validasi SEMUA input di server-side (jangan trust client)
-- [ ] Sanitize string input (trim, strip tags jika perlu)
-- [ ] Limit panjang input (maxLength di semua field)
-- [ ] Validate numeric types (quantity, price)
-- [ ] Validate enum values (payment_method, fulfillment_method, status)
-- [ ] Reject unexpected fields (whitelist approach)
+- [x] Validasi SEMUA input di server-side
+- [x] Sanitize string input (trim, strip_tags via `Validator::sanitize()`)
+- [x] Limit panjang input (maxLength semua field)
+- [x] Validate numeric types (quantity, price)
+- [x] Validate enum values (payment_method, fulfillment_method, status)
+- [x] Reject unexpected fields (whitelist di setiap Action)
 
 ### SQL Injection Prevention
 
-- [ ] Gunakan PDO prepared statements SELALU
-- [ ] JANGAN interpolate user input ke SQL string
-- [ ] Gunakan parameterized queries
-
-```php
-// ✅ BENAR
-$stmt = $pdo->prepare('SELECT * FROM users WHERE email = :email');
-$stmt->execute(['email' => $email]);
-
-// ❌ SALAH — JANGAN PERNAH
-$stmt = $pdo->query("SELECT * FROM users WHERE email = '$email'");
-```
-
-### XSS Prevention
-
-- [ ] Escape output di response (untuk data yang akan ditampilkan di HTML)
-- [ ] Set header `Content-Type: application/json` untuk API responses
-- [ ] Sanitize user-generated content (nama, alamat, catatan)
+- [x] Gunakan PDO prepared statements SELALU
+- [x] Parameterized queries di semua Repository
 
 ### CORS
 
-- [ ] Whitelist specific origin (`http://localhost:5173` di dev, domain production)
-- [ ] JANGAN gunakan `Access-Control-Allow-Origin: *` di production
-- [ ] Handle preflight (OPTIONS) requests
-- [ ] Only allow needed methods dan headers
+- [x] Whitelist specific origin (dari `CORS_ALLOWED_ORIGIN` env)
+- [x] Handle preflight (OPTIONS) requests
+- [x] **Sumber kebenaran CORS: `ResponseEmitter.php`** (bukan CorsMiddleware — ResponseEmitter dieksekusi terakhir dan override semua header)
 
-### HTTPS
+### Webhook Security (Payment)
 
-- [ ] Enforce HTTPS di production
-- [ ] Set `Secure` flag pada cookies
-- [ ] Use HSTS header
-
-### Error Handling
-
-- [ ] Jangan expose internal error details di production (`APP_DEBUG=false`)
-- [ ] Log errors ke file, bukan ke response
-- [ ] Return generic error message ke client
-- [ ] Handle semua exception types
-
-```php
-// Development
-{ "ok": false, "error": "SQLSTATE[42S02]: Base table or views not found..." }
-
-// Production (seharusnya)
-{ "ok": false, "error": "Terjadi kesalahan. Silakan coba lagi." }
-```
-
-### File Upload (jika ada)
-
-- [ ] Validate MIME type (jangan hanya extension)
-- [ ] Limit file size (e.g. max 5MB)
-- [ ] Generate random filename (jangan pakai original filename)
-- [ ] Simpan di luar document root atau gunakan storage service
-- [ ] Jangan execute uploaded files
+- [x] Verify SHA-512 signature Midtrans
+- [x] Idempotent: duplicate webhook dilayani tanpa efek samping
+- [x] Always return 200 OK (termasuk reject — agar Midtrans tidak retry)
+- [ ] Log webhook calls untuk audit ← **BELUM**
+- [ ] IP whitelist Midtrans ← **Opsional**
 
 ### Environment
 
-- [ ] `.env` masuk `.gitignore` (WAJIB)
-- [ ] Gunakan `.env.example` sebagai template (tanpa secret)
-- [ ] Jangan hardcode credentials di source code
-- [ ] Rotate secrets secara berkala
+- [x] `.env` masuk `.gitignore`
+- [x] `.env.example` sebagai template (tanpa secret)
+- [x] Tidak ada credentials hardcoded di source code
+
+### Error Handling
+
+- [x] `APP_DEBUG` dari env (false = hide internal errors)
+- [x] Return generic error ke client di production
 
 ---
 
-## Security Headers (Middleware)
+## Known Security Issues
 
-```php
-// Tambahkan di response middleware
-$response = $response
-    ->withHeader('X-Content-Type-Options', 'nosniff')
-    ->withHeader('X-Frame-Options', 'DENY')
-    ->withHeader('X-XSS-Protection', '1; mode=block')
-    ->withHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-```
-
----
-
-## Webhook Security (Payment)
-
-- [ ] Verify signature dari payment gateway
-- [ ] Validate IP whitelist (jika provider menyediakan)
-- [ ] Idempotency: handle duplicate webhook calls gracefully
-- [ ] Log semua webhook calls untuk audit
-
----
-
-## Data Privacy
-
-- [ ] Jangan log sensitive data (password, full card number)
-- [ ] Minimize data collection (hanya yang diperlukan)
-- [ ] Provide way for users to delete their account (GDPR compliance)
-- [ ] Hash/encrypt sensitive stored data jika diperlukan
+| # | Issue | Severity | Status |
+|---|---|---|---|
+| SEC-1 | `PATCH /api/orders/:id/pay` — client bisa klaim bayar tanpa verifikasi Midtrans | 🟡 Medium | ⬜ Open — remove/admin-gate |
+| SEC-2 | Tidak ada rate limiting di auth endpoints | 🟡 Medium | ⬜ Open |
+| SEC-3 | Guest session token tidak punya expiry | 🟢 Low | ⬜ Open |
 
 ---
 
 ## OWASP Top 10 Mapping
 
-| Risk | Mitigation |
-|---|---|
-| A01: Broken Access Control | User isolation, role checks, JWT validation |
-| A02: Cryptographic Failures | bcrypt, HTTPS, secure JWT secret |
-| A03: Injection | PDO prepared statements |
-| A04: Insecure Design | Input validation, principle of least privilege |
-| A05: Security Misconfiguration | .env, debug off in prod, security headers |
-| A06: Vulnerable Components | Composer audit, update dependencies |
-| A07: Auth Failures | Rate limiting, strong password policy |
-| A08: Data Integrity Failures | Webhook signature verification |
-| A09: Logging Failures | Log auth events, webhook calls |
-| A10: SSRF | Validate URLs, whitelist external calls |
+| Risk | Status | Mitigation |
+|---|---|---|
+| A01: Broken Access Control | ✅ | User isolation, role checks, JWT validation, session token |
+| A02: Cryptographic Failures | ✅ | bcrypt cost 12, HTTPS (production), secure JWT secret |
+| A03: Injection | ✅ | PDO prepared statements selalu |
+| A04: Insecure Design | ✅ | Input validation, whitelist fields, principle of least privilege |
+| A05: Security Misconfiguration | ✅ | .env, debug off in prod, security headers, CORS whitelist |
+| A06: Vulnerable Components | ⬜ | Composer audit belum dijadwalkan rutin |
+| A07: Auth Failures | ⬜ | Rate limiting belum ada |
+| A08: Data Integrity Failures | ✅ | Webhook signature SHA-512 verified |
+| A09: Logging Failures | ⬜ | Log webhook + auth events belum lengkap |
+| A10: SSRF | ✅ | External call hanya ke Midtrans (hardcoded URL) |

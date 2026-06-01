@@ -1,34 +1,23 @@
 # Frontend — Authentication
 
 > Flow autentikasi: register, login, logout, guest handling.
+> Terakhir update: 2026-06-01
 
 ---
 
-## Overview
+## Status: ✅ Real Backend Auth (JWT)
 
-- Autentikasi berbasis **localStorage** (MVP — akan diganti JWT + backend)
-- Support **guest checkout** tanpa login
-- Cart guest otomatis **merge** ke user cart saat login/register
+Autentikasi sudah pakai backend — tidak ada lagi localStorage user/password.
 
 ---
 
-## Data Model
+## Mekanisme Auth
 
-### User Object (tersimpan di localStorage)
-```js
-{
-  id: "usr_a1b2c3d4",          // createId('usr')
-  fullName: "Nama Lengkap",
-  email: "user@email.com",     // normalized lowercase
-  phone: "081234567890",       // normalized tanpa spasi/dash
-  password: "plaintext123",    // ⚠️ PLAIN TEXT — hanya simulasi!
-  createdAt: "2026-05-22T..."  // ISO string
-}
-```
-
-### Session State
-- `sessionUserId` → ID user yang sedang login, atau `null`
-- Disimpan di localStorage key `hanaka_session_user_v1`
+- **JWT token** disimpan di `localStorage` (`hanaka_auth_token`)
+- Token dikirim otomatis via `Authorization: Bearer <token>` di setiap request (`apiService.js`)
+- Auth restore saat app mount: `GET /api/auth/me` → set `currentUser`
+- Guest cart pakai `X-Session-Token` header (session token di localStorage `hanaka_session_token`)
+- Login/Register → guest cart otomatis di-merge ke user cart (backend handle)
 
 ---
 
@@ -37,20 +26,17 @@
 ```
 RegisterPage (form)
   ↓ submit
-validateRegistrationInput(values)    ← authModel.js
+validateRegistrationInput(values)    ← authModel.js (client-side)
   ↓ jika valid
-cek email unique di users array
-  ↓ jika unique
-buildAccount(values)                 ← authModel.js
-  ↓
-setUsers([...users, account])
-setSessionUserId(account.id)
-mergeGuestCartToUser()               ← merge cart __guest__ → user
+POST /api/auth/register
+  ↓ response: { user, token }
+setAuthToken(token) → localStorage
+setCurrentUser(user)
   ↓
 navigate(redirectTo || '/')
 ```
 
-### Validasi Register
+### Validasi Register (client-side, authModel.js)
 | Field | Rules |
 |---|---|
 | `fullName` | required, minLength(3) |
@@ -66,25 +52,22 @@ navigate(redirectTo || '/')
 ```
 LoginPage (form)
   ↓ submit
-validateLoginInput(values)           ← authModel.js
+validateLoginInput(values)           ← authModel.js (client-side)
   ↓ jika valid
-cari user di array: email match + password match
-  ↓ jika found
-setSessionUserId(user.id)
-mergeGuestCartToUser()               ← merge cart __guest__ → user
+POST /api/auth/login
+  ↓ response: { user, token }
+setAuthToken(token) → localStorage
+setCurrentUser(user)
   ↓
-navigate(redirectTo || '/')
+if (user.role === 'admin') → navigate('/admin/dashboard')
+else → navigate(redirectTo || '/')
 ```
 
-### Validasi Login
-| Field | Rules |
+### Error Handling
+| HTTP | Pesan |
 |---|---|
-| `email` | required, email format |
-| `password` | required |
-
-### Error Messages
-- Email tidak ditemukan / password salah: `"Email atau password belum sesuai."`
-- Email sudah terdaftar (register): `"Email ini sudah terdaftar. Silakan login."`
+| 401 | "Email atau password belum sesuai." |
+| 400 + errors | Tampil per-field |
 
 ---
 
@@ -92,41 +75,47 @@ navigate(redirectTo || '/')
 
 ```
 AppLayout → button Logout
-  ↓ click
+  ↓
 logoutAccount()
   ↓
-setSessionUserId(null)
+POST /api/auth/logout (best-effort)
+clearAuthToken() → hapus dari localStorage
+setCurrentUser(null)
 navigate('/')
 ```
 
 ---
 
-## Guest Cart Merge
-
-Saat user login/register, guest cart di-merge:
+## Auth Restore (App Mount)
 
 ```js
-function mergeGuestCartToUser(previousCarts, userId) {
-  const guestCart = previousCarts['__guest__'] ?? []
-  const userCart = previousCarts[userId] ?? []
-
-  if (!guestCart.length) return { ...previousCarts, [userId]: userCart }
-
-  return {
-    ...previousCarts,
-    [userId]: [...userCart, ...guestCart],
-    ['__guest__']: [],
-  }
-}
+// AppContext.jsx — useEffect on mount
+apiGetMe()
+  .then(user => setCurrentUser(user))
+  .catch(() => setCurrentUser(null))
+  .finally(() => setIsAuthLoading(false))
 ```
+
+Selama `isAuthLoading === true`, route guard menunggu sebelum redirect.
 
 ---
 
-## Redirect After Auth
+## Guest Cart Merge
 
-- `LoginPage` dan `RegisterPage` membaca `location.state.redirectTo`
-- `ProtectedRoute` menyimpan `pathname + search` ke state saat redirect ke login
-- Setelah auth sukses → navigate ke `redirectTo` atau fallback `/`
+Backend otomatis merge saat login/register:
+1. Frontend kirim `X-Session-Token` header saat call `POST /api/auth/login` atau `/register`
+2. Backend pindahkan semua cart item dari session token ke user cart
+
+---
+
+## Role-Based Access
+
+| Role | Redirect setelah login | Akses admin panel |
+|---|---|---|
+| `customer` | `redirectTo` atau `/` | ❌ |
+| `admin` | `/admin/dashboard` | ✅ |
+
+`AdminRoute` component mengecek `currentUser.role === 'admin'`.
 
 ---
 
@@ -134,19 +123,10 @@ function mergeGuestCartToUser(previousCarts, userId) {
 
 - `src/pages/LoginPage.jsx` — Login form
 - `src/pages/RegisterPage.jsx` — Register form
-- `src/models/authModel.js` — `validateRegistrationInput`, `validateLoginInput`, `buildAccount`
+- `src/services/authApi.js` — `apiLogin`, `apiRegister`, `apiLogout`, `apiGetMe`
+- `src/services/apiService.js` — Token management (setAuthToken, clearAuthToken)
+- `src/models/authModel.js` — Client-side validation (validateLoginInput, validateRegistrationInput)
 - `src/context/AppContext.jsx` — `registerAccount`, `loginAccount`, `logoutAccount`
 - `src/components/GuestRoute.jsx` — Redirect jika sudah login
-- `src/components/ProtectedRoute.jsx` — Redirect jika belum login
-
----
-
-## Catatan Migrasi ke Backend
-
-| Sekarang (Frontend) | Target (Backend) |
-|---|---|
-| Password plain text di localStorage | `password_hash(PASSWORD_BCRYPT)` di MySQL |
-| User array di localStorage | `users` table di MySQL |
-| `sessionUserId` di localStorage | JWT token di httpOnly cookie |
-| Email lookup di array | SQL query `WHERE email = ?` |
-| Guest cart key `__guest__` | Session token dari backend |
+- `src/components/ProtectedRoute.jsx` — Redirect ke /login jika belum login
+- `src/components/AdminRoute.jsx` — Redirect jika bukan admin

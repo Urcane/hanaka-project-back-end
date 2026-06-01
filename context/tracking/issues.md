@@ -1,6 +1,7 @@
 # Known Issues & Technical Debt
 
 > Bug, issues, dan technical debt yang perlu ditangani.
+> Terakhir update: 2026-06-01
 
 ---
 
@@ -8,11 +9,11 @@
 
 | # | Issue | Severity | Status | Detail |
 |---|---|---|---|---|
-| SEC-1 | Password plain text di localStorage | 🔴 Critical | ⬜ Open | Harus hash di backend. Saat ini disimpan tanpa enkripsi di browser — ini hanya untuk simulasi MVP. JANGAN deploy ke production tanpa backend. |
-| SEC-2 | Tidak ada CSRF protection | 🟡 Medium | ⬜ Open | Perlu CSRF token di form saat backend ready |
-| SEC-3 | Tidak ada rate limiting | 🟡 Medium | ⬜ Open | Login brute force vulnerable |
-| SEC-4 | Data sensitif di client | 🟡 Medium | ⬜ Open | Semua data (termasuk password) ada di localStorage — accessible via DevTools |
-| SEC-5 | Tidak ada input sanitization (XSS) | 🟢 Low | ⬜ Open | React sudah escape by default, tapi backend perlu sanitize |
+| SEC-1 | Password plain text di localStorage (frontend lama) | 🔴 Critical | ✅ Fixed | Frontend sudah pakai backend auth (JWT). localStorage tidak lagi menyimpan password. |
+| SEC-2 | Tidak ada rate limiting | 🟡 Medium | ⬜ Open | Login/register masih bisa di-brute-force. Tambah rate limiter di level middleware atau nginx. |
+| SEC-3 | PATCH /api/orders/:id/pay masih ada | 🟡 Medium | ⬜ Open | Endpoint lama yang memungkinkan client klaim "sudah bayar" sendiri tanpa verifikasi Midtrans. Perlu di-remove atau dibatasi admin-only. |
+| SEC-4 | Midtrans Server Key di .env plain | 🟢 Low | ⬜ Open | Aman selama .env di .gitignore (sudah). Rotate key secara berkala. |
+| SEC-5 | Guest session token tidak punya expiry | 🟢 Low | ⬜ Open | Token disimpan tanpa TTL di DB. Tambah cleanup job untuk cart guest yang idle. |
 
 ---
 
@@ -20,27 +21,24 @@
 
 | # | Issue | Priority | Status | Detail | Fix Plan |
 |---|---|---|---|---|---|
-| TD-1 | Semua data di localStorage | P0 | ⬜ Open | Tidak ada persistensi server | Integrasi backend API |
-| TD-2 | Produk hardcoded | P0 | ⬜ Open | Data statis di `products.js` | Pindah ke database + API |
-| TD-3 | QRIS simulasi | P0 | ⬜ Open | QR dari string, bukan real payment | Integrasi Midtrans/Xendit |
-| TD-4 | Tidak ada loading states | P1 | ⬜ Open | UX buruk saat async operations | Tambah spinner/skeleton |
-| TD-5 | Tidak ada error boundary | P1 | ⬜ Open | App crash jika network error | React Error Boundary |
-| TD-6 | Tidak ada tests | P1 | ⬜ Open | Zero test coverage | Unit test model layer |
-| TD-7 | CSS dalam 1 file besar | P2 | ⬜ Open | `app.css` ~500 baris | CSS modules atau split per page |
-| TD-8 | Gambar produk hanya 2 | P2 | ⬜ Open | 3 produk pakai gradient | Foto semua varian |
-| TD-9 | Image tanpa optimization | P2 | ⬜ Open | Tidak ada lazy load, WebP, srcset | Optimize assets |
-| TD-10 | Tidak ada SEO meta tags | P2 | ⬜ Open | Title statis, no description | React Helmet atau meta |
-| TD-11 | Accessibility (a11y) basic | P2 | ⬜ Open | Beberapa ARIA labels missing | Audit + fix |
-| TD-12 | Tidak ada 404 page | P3 | ⬜ Open | Catch-all redirect ke / | Buat 404 page |
-| TD-13 | Tidak ada favicon proper | P3 | ⬜ Open | Masih default | Buat branding favicon |
+| TD-1 | `PATCH /api/orders/:id/pay` tidak lagi diperlukan | P1 | ⬜ Open | Endpoint ini bypass Midtrans — bayar diakui hanya dari client. Sekarang ada webhook + polling. | Remove atau restrict ke admin only |
+| TD-2 | Tidak ada tests | P1 | ⬜ Open | Zero test coverage backend. Skeleton test ada tapi belum diisi. | Unit test Actions + Validators |
+| TD-3 | CSS frontend dalam 1 file besar | P2 | ⬜ Open | `app.css` ~900+ baris | CSS modules atau split per page |
+| TD-4 | Gambar produk hanya 2 | P2 | ⬜ Open | 3 produk pakai CSS gradient | Foto semua 5 varian |
+| TD-5 | Tidak ada SEO meta tags | P2 | ⬜ Open | Title statis, no og:tags | React Helmet atau meta |
+| TD-6 | Accessibility (a11y) basic | P2 | ⬜ Open | Beberapa ARIA labels missing | Audit + fix |
+| TD-7 | Rate limiting belum ada | P1 | ⬜ Open | Auth endpoint vulnerable brute force | Middleware atau nginx limit |
+| TD-8 | Tidak ada 404 page | P3 | ⬜ Open | Catch-all redirect ke / | Buat 404 page |
+| TD-9 | qrisService.js masih ada di frontend | P3 | ⬜ Open | Masih dipakai untuk render QR dari string. Ini sudah correct usage, bukan legacy. | Keep — tidak perlu dihapus |
+| TD-10 | context.md dan context tracking masih outdated | P2 | ✅ Fixed | Sudah diupdate 2026-06-01 | — |
 
 ---
 
 ## Bugs
 
-| # | Bug | Severity | Status | Steps to Reproduce | Fix |
+| # | Bug | Severity | Status | Detail | Fix |
 |---|---|---|---|---|---|
-| — | *(Belum ada bug tercatat)* | — | — | — | — |
+| BUG-1 | CORS blocked dari localhost:5173 | 🔴 High | ✅ Fixed | `ResponseEmitter.php` (Slim skeleton) override header dari `CorsMiddleware` — `ngrok-skip-browser-warning` tidak diizinkan | Tambah header di `ResponseEmitter.php` + ganti `$_SERVER['HTTP_ORIGIN']` ke `$_ENV['CORS_ALLOWED_ORIGIN']` |
 
 ---
 
@@ -48,28 +46,6 @@
 
 | # | Issue | Impact | Catatan |
 |---|---|---|---|
-| PERF-1 | Context re-renders | Low | React Compiler handles ini, tapi perlu monitor jika state bertambah |
-| PERF-2 | No code splitting | Medium | Semua pages di-load sekaligus. Tambah `React.lazy()` jika app membesar |
-| PERF-3 | Font loading (Google) | Low | Bisa tambah `font-display: swap` dan preload |
-| PERF-4 | Image sizes | Low | Gambar belum di-compress optimal |
-
----
-
-## Cara Menambah Issue
-
-Format:
-```markdown
-| TD-XX | [Deskripsi singkat] | [P0/P1/P2/P3] | ⬜ Open | [Detail] | [Rencana fix] |
-```
-
-Severity/Priority:
-- **P0**: Blocker — harus diperbaiki sebelum production
-- **P1**: Important — perbaiki segera setelah P0 selesai
-- **P2**: Nice-to-have — perbaiki jika ada waktu
-- **P3**: Backlog — someday/maybe
-
-Status:
-- ⬜ Open
-- 🔄 In Progress
-- ✅ Fixed
-- ❌ Won't Fix
+| PERF-1 | Polling setiap 5 detik | Medium | Bisa diganti WebSocket di masa depan, tapi polling cukup untuk MVP |
+| PERF-2 | No code splitting (frontend) | Medium | Tambah `React.lazy()` jika app membesar |
+| PERF-3 | Image belum dioptimasi | Low | Gambar belum di-compress / convert ke WebP |

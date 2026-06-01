@@ -1,256 +1,116 @@
-# Frontend ↔ Backend Integration Plan
+# Frontend ↔ Backend Integration Status
 
-> Langkah-langkah detail untuk mengintegrasikan frontend dengan backend.
-
----
-
-## Overview
-
-Saat ini frontend berjalan sepenuhnya dengan localStorage. Integrasi ke backend dilakukan secara bertahap agar tidak break existing functionality.
+> Terakhir update: 2026-06-01
 
 ---
 
-## Fase 1: Backend Foundation (Prerequisite)
+## Status Keseluruhan: ✅ FULLY INTEGRATED
 
-**Status: ✅ SELESAI**
-
-```
-✅ Setup Slim PHP project structure
-✅ Database + migrations ready (7 tables)
-✅ Seed products data (5 produk + 20 sizes)
-✅ Auth endpoints working (register, login, me, logout)
-✅ CORS middleware configured (localhost:5173)
-□ Tested via Postman/Thunder Client
-```
-
-**Note**: Backend sudah diimplementasikan. Tinggal setup MySQL, run migrations, dan test.
-Lihat `context/frontend-reference.md` untuk API reference lengkap.
+Frontend dan backend sudah terhubung penuh. Tidak ada lagi localStorage untuk data utama.
 
 ---
 
-## Fase 2: API Service Layer (Frontend)
+## Status per Fitur
 
-Buat abstraksi API di frontend **tanpa mengubah business logic**:
-
-### Step 1: Buat `src/services/apiService.js`
-
-```js
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
-
-let authToken = null
-
-export function setAuthToken(token) {
-  authToken = token
-}
-
-export function clearAuthToken() {
-  authToken = null
-}
-
-async function request(method, path, body = null) {
-  const headers = { 'Content-Type': 'application/json' }
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`
-  }
-
-  const options = { method, headers }
-  if (body) {
-    options.body = JSON.stringify(body)
-  }
-
-  const response = await fetch(`${API_BASE}${path}`, options)
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw { status: response.status, ...data }
-  }
-
-  return data
-}
-
-export const api = {
-  get: (path) => request('GET', path),
-  post: (path, body) => request('POST', path, body),
-  put: (path, body) => request('PUT', path, body),
-  patch: (path, body) => request('PATCH', path, body),
-  delete: (path) => request('DELETE', path),
-}
-```
-
-### Step 2: Buat `src/services/authApi.js`
-
-```js
-import { api, setAuthToken, clearAuthToken } from './apiService.js'
-
-export async function apiRegister(values) {
-  const data = await api.post('/auth/register', values)
-  setAuthToken(data.token)
-  return data
-}
-
-export async function apiLogin(values) {
-  const data = await api.post('/auth/login', values)
-  setAuthToken(data.token)
-  return data
-}
-
-export async function apiLogout() {
-  clearAuthToken()
-  await api.post('/auth/logout').catch(() => {}) // best-effort
-}
-
-export async function apiGetMe() {
-  return api.get('/auth/me')
-}
-```
-
-### Step 3: Buat API services lainnya
-
-```
-src/services/
-├── apiService.js      # Base fetch wrapper
-├── authApi.js         # Auth endpoints
-├── productsApi.js     # GET /products, GET /products/:id
-├── cartApi.js         # Cart CRUD
-├── ordersApi.js       # Orders CRUD
-├── paymentApi.js      # QRIS payment
-├── storageService.js  # ← KEEP untuk fallback/migration period
-└── qrisService.js     # ← REMOVE setelah backend payment ready
-```
+| Fitur | Status | Catatan |
+|---|---|---|
+| Products API | ✅ | Fetch dari `GET /api/products` |
+| Auth (register/login/logout/me) | ✅ | JWT di localStorage |
+| Cart CRUD | ✅ | User + guest via X-Session-Token |
+| Cart merge | ✅ | Otomatis saat login/register |
+| Order create | ✅ | `POST /api/orders` |
+| Order list (history) | ✅ | `GET /api/orders` (auth required) |
+| QRIS payment | ✅ | Midtrans Core API — real QR |
+| Payment status polling | ✅ | `GET /api/payments/qris/status` tiap 5 detik |
+| Payment webhook | ✅ | `POST /api/payments/webhook` dari Midtrans |
+| Admin dashboard | ✅ | Full CRUD produk, manage orders |
 
 ---
 
-## Fase 3: Context Migration
+## Frontend Services (../hanaka-project/src/services/)
 
-Update `AppContext.jsx` secara bertahap:
-
-### Strategy: Feature Toggle
-
-```js
-const USE_API = import.meta.env.VITE_USE_API === 'true'
-```
-
-Ini memungkinkan switch antara localStorage dan API tanpa mengubah logic.
-
-### Migration Order (paling mudah dulu):
-
-1. **Products** — Paling simple, read-only
-   - Replace `import { cakeCatalog }` dengan `useEffect(() => fetchProducts())`
-   - Tambah loading state
-
-2. **Auth** — Independent, tidak affect cart/order
-   - Replace `loginAccount`/`registerAccount` dengan API calls
-   - Simpan JWT di state (bukan localStorage)
-   - Add `apiGetMe()` di mount untuk restore session
-
-3. **Cart** — Depends on auth (untuk user identification)
-   - Replace cart operations dengan API calls
-   - Guest cart via session cookie
-
-4. **Orders** — Depends on cart (create order from cart)
-   - Replace order operations dengan API calls
-
-5. **Payment** — Last, depends on order
-   - Replace local QR generation dengan `POST /api/payments/qris`
-   - Add polling for payment status
-
----
-
-## Fase 4: UI Updates
-
-Setelah API connected:
-
-### Loading States
-```jsx
-function MenuPage() {
-  const { products, isLoading } = useApp()
-
-  if (isLoading) return <LoadingSkeleton />
-  return <ProductGrid products={products} />
-}
-```
-
-### Error Handling
-```jsx
-function ErrorBoundary({ children }) {
-  // Catch network errors, show retry UI
-}
-```
-
-### Optimistic Updates (Cart)
-```jsx
-// Update UI immediately, revert if API fails
-const updateCartQuantity = async (itemId, quantity) => {
-  const previousItems = cartItems
-  setCartItems(items => items.map(...)) // optimistic
-
-  try {
-    await cartApi.updateQuantity(itemId, quantity)
-  } catch {
-    setCartItems(previousItems) // revert
-    showError('Gagal update quantity')
-  }
-}
-```
-
----
-
-## Fase 5: Cleanup
-
-Setelah semua terintegrasi:
-
-```
-□ Hapus src/services/storageService.js
-□ Hapus src/services/qrisService.js (jika backend handle QR)
-□ Hapus src/data/products.js (data dari API)
-□ Update .env.example dengan VITE_API_BASE_URL
-□ Remove localStorage fallback code
-□ Update claude.md dan context docs
-```
-
----
-
-## Environment Configuration
-
-### Development
-```env
-VITE_API_BASE_URL=http://localhost:8080/api
-VITE_USE_API=true
-```
-
-### Production
-```env
-VITE_API_BASE_URL=https://api.hanakacake.com/api
-VITE_USE_API=true
-```
-
-### Fallback (tanpa backend)
-```env
-VITE_USE_API=false
-# Frontend akan pakai localStorage mode
-```
-
----
-
-## Testing Plan
-
-| Step | Test |
+| File | Endpoint yang dipakai |
 |---|---|
-| 1 | Register → verify user created di DB |
-| 2 | Login → verify JWT valid |
-| 3 | Add to cart → verify cart di DB |
-| 4 | Checkout → verify order di DB |
-| 5 | QRIS payment → verify QR generated |
-| 6 | Guest checkout → verify session-based cart |
-| 7 | Login after guest → verify cart merged |
-| 8 | Order history → verify only user's orders shown |
-| 9 | Error scenarios → verify graceful handling |
+| `apiService.js` | Base fetch wrapper — JWT + session token otomatis di semua request |
+| `authApi.js` | `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/me` |
+| `productsApi.js` | `/products`, `/products/:id` |
+| `cartApi.js` | `/cart`, `/cart/items`, `/cart/items/:id`, `/cart/items/:id/quantity` |
+| `ordersApi.js` | `/orders`, `/orders/:id`, `/orders/:id/pay` |
+| `paymentApi.js` | `/payments/qris`, `/payments/qris/status` |
+| `adminApi.js` | `/admin/*` endpoints |
+| `qrisService.js` | **Bukan API** — render EMV qrString ke PNG (npm `qrcode`) |
 
 ---
 
-## Rollback Plan
+## Dev Setup
 
-Jika integrasi bermasalah:
-1. Set `VITE_USE_API=false` → kembali ke localStorage mode
-2. Frontend tetap functional tanpa backend
-3. Fix backend issue, lalu enable kembali
+```bash
+# Backend (port 8080)
+cd hanaka-project-back-end
+composer start          # php -S localhost:8080 -t public
+
+# Database (sekali saja)
+php database/migrate.php --seed
+
+# Frontend (port 5173)
+cd hanaka-project
+npm run dev
+```
+
+---
+
+## Env Frontend (hanaka-project/.env)
+
+```env
+VITE_API_URL=http://localhost:8080/api
+```
+
+## Env Backend (.env)
+
+```env
+CORS_ALLOWED_ORIGIN=http://localhost:5173
+MIDTRANS_SERVER_KEY=Mid-server-xxxx
+MIDTRANS_IS_PRODUCTION=false
+MIDTRANS_QRIS_ACQUIRER=gopay
+```
+
+---
+
+## CORS
+
+**Sumber kebenaran CORS ada di `ResponseEmitter.php`** (bukan `CorsMiddleware`).
+`ResponseEmitter` dieksekusi paling akhir dan **override semua header** dari middleware.
+
+File: `src/Application/ResponseEmitter/ResponseEmitter.php`
+
+Header yang diizinkan:
+```
+Access-Control-Allow-Headers: X-Requested-With, Content-Type, Accept, Origin,
+                               Authorization, X-Session-Token, ngrok-skip-browser-warning
+```
+
+---
+
+## Testing Payment (Lokal)
+
+1. Jalankan backend + ngrok: `ngrok http 8080`
+2. Set Notification URL di [dashboard.sandbox.midtrans.com](https://dashboard.sandbox.midtrans.com):
+   ```
+   https://xxxx.ngrok-free.app/api/payments/webhook
+   ```
+3. Buat order QRIS → scan QR atau gunakan [simulator.sandbox.midtrans.com](https://simulator.sandbox.midtrans.com)
+4. Frontend polling auto-detect `paid` dalam ≤5 detik → redirect ke `/orders`
+
+> ngrok URL berubah setiap restart (free plan). Update di Midtrans dashboard setiap kali restart.
+
+---
+
+## Yang Sudah Tidak Dipakai
+
+| Yang dihapus / tidak dipakai | Keterangan |
+|---|---|
+| `storageService.js` | Sudah tidak dipakai untuk data utama |
+| `localStorage` untuk users/cart/orders | Diganti API |
+| `authModel.buildAccount()` | Diganti `POST /api/auth/register` |
+| `orderModel.createOrder()` | Diganti `POST /api/orders` |
+| QRIS simulasi string lokal | Diganti Midtrans real QR |

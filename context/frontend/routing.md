@@ -1,10 +1,13 @@
 # Frontend — Routing
 
 > Definisi semua route dan navigation flow.
+> Terakhir update: 2026-06-01
 
 ---
 
 ## Route Table
+
+### Customer Routes
 
 | Path | Component | Guard | Keterangan |
 |---|---|---|---|
@@ -14,23 +17,39 @@
 | `/menu/:productId` | `CustomizeCakePage` | — | Form kustomisasi + edit cart item |
 | `/cart` | `CartPage` | — | Keranjang belanja |
 | `/checkout` | `CheckoutPage` | — | Form checkout (`?mode=pickup\|delivery`) |
-| `/payment/:orderId` | `PaymentQrisPage` | — | Halaman QRIS payment |
+| `/payment/:orderId` | `PaymentQrisPage` | — | QRIS payment (Midtrans) |
 | `/orders` | `OrderHistoryPage` | `ProtectedRoute` | Riwayat order (harus login) |
 | `/login` | `LoginPage` | `GuestRoute` | Login (redirect jika sudah login) |
 | `/register` | `RegisterPage` | `GuestRoute` | Register (redirect jika sudah login) |
-| `*` | redirect → `/` | — | Catch-all 404 |
+| `*` | redirect → `/` | — | Catch-all |
+
+### Admin Routes
+
+| Path | Component | Guard | Keterangan |
+|---|---|---|---|
+| `/admin` | redirect → `/admin/dashboard` | `AdminRoute` | — |
+| `/admin/dashboard` | `AdminDashboardPage` | `AdminRoute` | Statistik & ringkasan |
+| `/admin/orders` | `AdminOrdersPage` | `AdminRoute` | List semua order |
+| `/admin/orders/:orderId` | `AdminOrderDetailPage` | `AdminRoute` | Detail order + update status |
+| `/admin/products` | `AdminProductsPage` | `AdminRoute` | CRUD produk & ukuran |
+| `/admin/customers` | `AdminCustomersPage` | `AdminRoute` | List customer |
 
 ---
 
 ## Route Guards
 
 ### `ProtectedRoute`
-- Cek `currentUser` dari context
-- Jika null → redirect ke `/login` dengan `state.redirectTo` (agar setelah login kembali ke halaman asal)
+- Cek `currentUser` dari context (tunggu `isAuthLoading`)
+- Jika null → redirect ke `/login` dengan `state.redirectTo`
 
 ### `GuestRoute`
 - Cek `currentUser` dari context
 - Jika ada user → redirect ke `/`
+
+### `AdminRoute`
+- Cek `currentUser?.role === 'admin'`
+- Jika bukan admin → redirect ke `/`
+- Selama `isAuthLoading` → tampil loading
 
 ---
 
@@ -40,19 +59,33 @@
 <BrowserRouter>
   <AppProvider>
     <Routes>
-      <Route element={<AppLayout />}>     ← Shared layout (header + nav + footer)
-        <Route path="/" ... />
-        <Route path="/menu" ... />
-        <Route path="/menu/:productId" ... />
-        <Route path="/cart" ... />
-        <Route path="/checkout" ... />
-        <Route path="/payment/:orderId" ... />
-        <Route path="/orders" ... />       ← Wrapped in ProtectedRoute
+
+      {/* Customer layout */}
+      <Route element={<AppLayout />}>
+        <Route path="/" />
+        <Route path="/menu" />
+        <Route path="/menu/:productId" />
+        <Route path="/cart" />
+        <Route path="/checkout" />
+        <Route path="/payment/:orderId" />
+        <Route path="/orders" />   ← ProtectedRoute
       </Route>
 
-      <Route path="/login" ... />          ← GuestRoute, NO AppLayout
-      <Route path="/register" ... />       ← GuestRoute, NO AppLayout
+      {/* Admin layout */}
+      <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+        <Route index redirect /admin/dashboard />
+        <Route path="dashboard" />
+        <Route path="orders" />
+        <Route path="orders/:orderId" />
+        <Route path="products" />
+        <Route path="customers" />
+      </Route>
+
+      {/* Auth — no layout */}
+      <Route path="/login" />    ← GuestRoute
+      <Route path="/register" /> ← GuestRoute
       <Route path="*" redirect />
+
     </Routes>
   </AppProvider>
 </BrowserRouter>
@@ -60,24 +93,7 @@
 
 ---
 
-## Navigation Flow
-
-```
-HomePage → MenuPage → CustomizeCakePage → CartPage → CheckoutPage → PaymentQrisPage
-                                              ↑                           ↓
-                                              └─── edit item ────────────┘
-                                                                         ↓
-                                                                  OrderHistoryPage
-```
-
-### Login/Register Flow
-```
-Any page → /login → (redirect to original page)
-                  ↕
-              /register
-```
-
-### Query Parameters
+## Query Parameters
 
 | Route | Param | Fungsi |
 |---|---|---|
@@ -89,6 +105,8 @@ Any page → /login → (redirect to original page)
 ## File Terkait
 
 - `src/App.jsx` — Route definitions
-- `src/components/AppLayout.jsx` — Shared layout shell
+- `src/components/AppLayout.jsx` — Customer layout shell
+- `src/components/AdminLayout.jsx` — Admin layout shell
 - `src/components/ProtectedRoute.jsx` — Auth guard
 - `src/components/GuestRoute.jsx` — Guest guard
+- `src/components/AdminRoute.jsx` — Admin guard

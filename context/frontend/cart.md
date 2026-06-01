@@ -1,41 +1,53 @@
 # Frontend — Cart (Keranjang)
 
-> Logic keranjang belanja: add, edit, remove, quantity, guest/user separation.
+> Logic keranjang belanja: add, edit, remove, quantity, guest/user.
+> Terakhir update: 2026-06-01
 
 ---
 
-## Overview
+## Status: ✅ Data dari API
 
-- Cart **per-user**: setiap user (atau guest) punya cart sendiri
-- Guest cart key: `__guest__`
-- User cart key: `userId` (e.g. `usr_a1b2c3d4`)
-- Quantity range: **1–5** per item
-- Cart di-persist ke localStorage via `cartsByUser` object
+Cart sudah pakai backend API — tidak ada lagi `cartsByUser` di localStorage.
 
 ---
 
-## Cart Item Structure
+## Cart Item Structure (dari API response)
 
 ```js
 {
-  id: "cart_x1y2z3w4",              // createId('cart')
+  id: "cart_bd83466f",
   productId: "black-forest",
   productName: "Black Forest Cake",
   productDescription: "Manis, lembut...",
   productGradient: "linear-gradient(...)",
+  productImage: "brownies.jpg",        // null jika tidak ada
   size: {
-    id: "size-18",
+    id: "size-18-bf",
     label: "18",
+    fullLabel: "Ukuran 18 cm",
     price: 170000,
   },
-  colorText: "Merah Muda",          // Warna kue
-  theme: "Roblox",                  // Tema kue (opsional)
-  message: "Happy Birthday",        // Catatan tambahan
-  quantity: 2,                      // 1–5
-  unitPrice: 170000,                // = size.price
-  totalPrice: 340000,               // = unitPrice × quantity
+  colorText: "Merah Muda",
+  theme: "Ulang Tahun",
+  message: "Happy Birthday Mama!",
+  quantity: 1,
+  unitPrice: 170000,
+  totalPrice: 170000,
 }
 ```
+
+---
+
+## State di Context
+
+```js
+cartItems       // array cart item dari GET /api/cart
+cartItemCount   // total quantity (bukan jumlah item unik)
+cartSubtotal    // total harga
+isCartLoading   // loading pada mount
+```
+
+Cart di-refresh via `refreshCart()` setelah setiap operasi (add/edit/remove/qty).
 
 ---
 
@@ -44,62 +56,60 @@
 ### Add to Cart
 ```
 CustomizeCakePage → form submit
-  ↓
-validateCustomizationInput(product, values)    ← cartModel.js
-  ↓ jika valid
-addToCart(payload) di context
-  ↓
-resolveCustomization(payload)                  ← cek product & size valid
-  ↓
-buildCartItem({product, sizeOption, colorText, theme, message, quantity})
-  ↓
-append ke cartsByUser[activeCartKey]
-  ↓
-navigate('/cart')
+  ↓ validateCustomizationInput(product, values) ← client-side
+  ↓ POST /api/cart/items
+    { productId, sizeId, colorText, theme, message, quantity }
+  ↓ jika guest baru: response.sessionToken → setSessionToken() → localStorage
+  ↓ refreshCart() → GET /api/cart
+  ↓ navigate('/cart')
 ```
 
 ### Edit Cart Item
 ```
 CartPage → klik "Edit Pesanan"
-  ↓
-navigate('/menu/:productId?edit=:cartItemId')
-  ↓
-CustomizeCakePage loads with editingItem
-  ↓ form pre-filled with existing data
-form submit → editCartItem(itemId, payload)
-  ↓
-rebuildCartItem(existingItem, {sizeOption, colorText, theme, message, quantity})
-  ↓
-replace item in cartsByUser[activeCartKey]
-  ↓
-navigate('/cart')
+  ↓ navigate('/menu/:productId?edit=:cartItemId')
+  ↓ CustomizeCakePage load existing data
+  ↓ PUT /api/cart/items/:id
+    { sizeId, colorText, theme, message, quantity }
+  ↓ refreshCart()
+  ↓ navigate('/cart')
 ```
 
 ### Update Quantity
 ```
-CartPage → klik ＋/－
-  ↓
-updateCartQuantity(itemId, newQuantity)
-  ↓
-updateCartItemQuantity(item, quantity) → clamp 1-5, recalculate totalPrice
+CartPage → klik +/−
+  ↓ PATCH /api/cart/items/:id/quantity
+    { quantity }
+  ↓ refreshCart()
 ```
 
 ### Remove Item
 ```
-CartPage → klik 🗑
-  ↓
-removeCartItem(itemId) → filter out dari array
+CartPage → klik hapus
+  ↓ DELETE /api/cart/items/:id
+  ↓ refreshCart()
 ```
 
 ### Clear Cart
 ```
-(called internally setelah placeOrder)
-clearCart() → set cartsByUser[activeCartKey] = []
+(dipanggil setelah placeOrder)
+  ↓ DELETE /api/cart
+  ↓ setCartItems([]), setCartSubtotal(0), setCartItemCount(0)
 ```
 
 ---
 
-## Validation (Customization Form)
+## Guest Cart
+
+Guest diidentifikasi via `X-Session-Token` header (dikirim otomatis oleh `apiService.js`).
+Session token digenerate backend saat pertama kali add to cart dan dikembalikan di response.
+Token disimpan di localStorage (`hanaka_session_token`).
+
+Saat login/register → backend auto-merge guest cart ke user cart.
+
+---
+
+## Validation (Customization Form — client-side)
 
 | Field | Rules |
 |---|---|
@@ -111,31 +121,10 @@ clearCart() → set cartsByUser[activeCartKey] = []
 
 ---
 
-## Computed Values
-
-| Computed | Formula | Sumber |
-|---|---|---|
-| `cartItems` | `cartsByUser[activeCartKey] ?? []` | Context |
-| `cartItemCount` | `cartItems.reduce((c, item) => c + item.quantity, 0)` | Context |
-| `cartSubtotal` | `cartItems.reduce((t, item) => t + item.totalPrice, 0)` | cartModel |
-
----
-
-## CartPage UI
-
-- Tabel: Items / QTY / Subtotal (3 kolom, responsive jadi 1 kolom di mobile)
-- Setiap item menampilkan: nama, size, warna, tema, catatan, "Edit Pesanan" link
-- Qty stepper (＋/－) per item
-- Subtotal per item
-- Tombol hapus (🗑) per item
-- Fulfillment toggle (Pickup / Delivery) → menentukan query param di URL checkout
-- Total bar: Total harga + tombol "Bayar" → navigate ke `/checkout?mode=pickup|delivery`
-
----
-
 ## File Terkait
 
-- `src/models/cartModel.js` — `validateCustomizationInput`, `buildCartItem`, `rebuildCartItem`, `updateCartItemQuantity`, `computeCartSubtotal`
-- `src/context/AppContext.jsx` — `addToCart`, `editCartItem`, `updateCartQuantity`, `removeCartItem`, `clearCart`
+- `src/services/cartApi.js` — `apiFetchCart`, `apiAddCartItem`, `apiUpdateCartItem`, `apiUpdateCartItemQuantity`, `apiRemoveCartItem`, `apiClearCart`
+- `src/models/cartModel.js` — `validateCustomizationInput`, `computeCartSubtotal`
+- `src/context/AppContext.jsx` — `addToCart`, `editCartItem`, `updateCartQuantity`, `removeCartItem`, `clearCart`, `refreshCart`
 - `src/pages/CartPage.jsx` — Cart display & interactions
 - `src/pages/CustomizeCakePage.jsx` — Add/edit form

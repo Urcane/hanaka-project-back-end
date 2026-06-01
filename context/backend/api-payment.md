@@ -1,222 +1,191 @@
 # Backend — Payment API (QRIS)
 
-> Endpoint untuk pembayaran QRIS dan integrasi payment gateway.
+> Endpoint untuk pembayaran QRIS via Midtrans Core API.
 
 ---
 
-## Current State: Simulasi
+## Status: ✅ IMPLEMENTED (Midtrans Sandbox)
 
-Saat ini QRIS hanya simulasi (QR dari string lokal). Backend akan mengintegrasikan **Midtrans** atau **Xendit** untuk real QRIS payment.
+Provider: **Midtrans Core API** (bukan Snap/Midtrans.js).
+QR di-render di frontend dari `qrString` EMV menggunakan npm `qrcode`.
+
+---
+
+## Environment Variables
+
+```env
+MIDTRANS_SERVER_KEY=Mid-server-xxxx     # wajib — dari dashboard Midtrans
+MIDTRANS_IS_PRODUCTION=false            # true untuk production
+MIDTRANS_QRIS_ACQUIRER=gopay           # gopay (default) atau airpay
+```
+
+> Client Key dan Merchant ID **tidak dipakai** — kita pakai Core API server-side,
+> bukan Snap/Midtrans.js yang butuh client key di browser.
 
 ---
 
 ## Endpoints
 
-### POST `/api/payments/qris`
+### `POST /api/payments/qris`
 
-Generate QRIS payment untuk sebuah order.
+Generate QRIS charge via Midtrans. Jika QR masih valid (belum expired), endpoint
+mengembalikan data QR yang sudah ada (reuse) tanpa charge ulang ke Midtrans.
 
 **Request:**
 ```json
-{
-  "orderId": "ord_q1r2s3t4"
-}
+{ "orderId": "ord_q1r2s3t4" }
 ```
 
 **Validation:**
-1. Order exists
-2. User has access to order
+1. `orderId` tidak kosong
+2. Order ditemukan (user/session ownership check)
 3. `paymentMethod === 'qris'`
-4. `paymentStatus === 'pending'` (belum dibayar)
+4. `paymentStatus !== 'paid'`
 
-**Success Response (201):**
+**Response 201 (QR baru dibuat):**
 ```json
 {
   "ok": true,
   "payment": {
     "orderId": "ord_q1r2s3t4",
-    "orderNumber": "HNK-20260522-143052-847",
-    "amount": 340000,
-    "qrImageUrl": "https://api.midtrans.com/v2/qris/...",
-    "qrString": "00020101021126...",
-    "expiresAt": "2026-05-22T08:00:00Z",
+    "orderNumber": "HNK-20260601-143213-348",
+    "amount": 170000,
+    "qrString": "00020101021226620014COM.GO-JEK...",
+    "qrImageUrl": "https://api.sandbox.midtrans.com/v2/qris/.../qr-code",
+    "expiresAt": "2026-06-01T12:41:08+00:00",
     "status": "pending"
   }
 }
 ```
 
-**Error (400):**
-```json
-{
-  "ok": false,
-  "error": "Order sudah dibayar."
-}
-```
+**Response 200 (reuse QR yang masih valid)**
+
+**Error 400:** `Order ini bukan pembayaran QRIS.`  
+**Error 400:** `Order ini sudah dibayar.`  
+**Error 404:** `Order tidak ditemukan.`  
+**Error 502:** `Gagal membuat pembayaran QRIS: <pesan dari Midtrans>`  
+**Error 503:** `Pembayaran QRIS belum dikonfigurasi di server.`
 
 ---
 
-## Midtrans Integration (Planned)
+### `GET /api/payments/qris/status?orderId=xxx`
 
-### Configuration
-```env
-MIDTRANS_SERVER_KEY=SB-Mid-server-xxxxx
-MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxxx
-MIDTRANS_IS_PRODUCTION=false
-```
+Cek status pembayaran live dari Midtrans. Digunakan frontend untuk polling
+(tiap 5 detik) sampai status `paid`/`expired`/`failed`.
 
-### Create Transaction (Server-side)
-```php
-// Pseudo-code
-class QrisPaymentService {
-    public function createQrisPayment(Order $order): array {
-        $params = [
-            'transaction_details' => [
-                'order_id' => $order->orderNumber,
-                'gross_amount' => $order->totalPrice,
-            ],
-            'payment_type' => 'qris',
-            'customer_details' => [
-                'first_name' => $order->customerName,
-                'phone' => $order->customerPhone,
-            ],
-        ];
+**Query param:** `orderId` (internal order id, bukan order_number)
 
-        // Call Midtrans API
-        $response = Http::post('https://api.midtrans.com/v2/charge', $params, [
-            'Authorization' => 'Basic ' . base64_encode($this->serverKey . ':'),
-        ]);
-
-        return [
-            'qrString' => $response['actions'][0]['url'],
-            'transactionId' => $response['transaction_id'],
-            'expiresAt' => $response['expiry_time'],
-        ];
-    }
+**Response 200:**
+```json
+{
+  "ok": true,
+  "status": "pending",
+  "order": { ...orderObject }
 }
 ```
 
+`status` bisa: `pending` | `paid` | `expired` | `failed`
+
+Jika Midtrans return `settlement` → otomatis update DB ke `paid` + `diproses`.
+
 ---
 
-## Payment Webhook (Notification)
+### `POST /api/payments/webhook`
 
-### POST `/api/payments/webhook` (from Midtrans)
+Endpoint untuk HTTP notification dari Midtrans (webhook). **Selalu return 200 OK**
+agar Midtrans tidak retry — rejection (signature invalid, order tidak ada) dilakukan
+secara silent tanpa update data.
 
-Midtrans akan mengirim notification saat payment status berubah.
+**Setup di Midtrans Dashboard:**
+```
+Settings → Configuration → Notification URL:
+https://<domain-kamu>/api/payments/webhook
+```
 
-**Request (from Midtrans):**
+**Untuk testing lokal:** gunakan ngrok + URL yang di-update di dashboard setiap kali ngrok restart.
+
+**Request dari Midtrans:**
 ```json
 {
+  "order_id": "HNK-20260601-143213-348",
   "transaction_status": "settlement",
-  "order_id": "HNK-20260522-143052-847",
-  "gross_amount": "340000.00",
-  "payment_type": "qris",
-  "signature_key": "..."
+  "status_code": "200",
+  "gross_amount": "170000.00",
+  "fraud_status": "accept",
+  "signature_key": "<sha512(order_id+status_code+gross_amount+serverKey)>"
 }
 ```
 
 **Logic:**
-1. Verify signature (prevent spoofing)
-2. Find order by `order_number`
-3. If `transaction_status === 'settlement'`:
-   - Update `payment_status = 'paid'`
-   - Update `status = 'diproses'`
-4. If `transaction_status === 'expire'`:
-   - Update `payment_status = 'expired'`
-5. Return 200 OK
-
-**Signature Verification:**
-```php
-$serverKey = $_ENV['MIDTRANS_SERVER_KEY'];
-$hashed = hash('sha512',
-    $notification['order_id'] .
-    $notification['status_code'] .
-    $notification['gross_amount'] .
-    $serverKey
-);
-
-if ($hashed !== $notification['signature_key']) {
-    return response(403, 'Invalid signature');
-}
-```
+1. Cek `order_id` dan `signature_key` ada → jika tidak, return 200 `ignored: missing fields`
+2. Verifikasi SHA-512 signature → jika invalid, return 200 `ignored: invalid signature`
+3. Cari order by `order_number` → jika tidak ada, return 200 `ignored: order not found`
+4. Map `transaction_status` ke internal status:
+   - `settlement` / `capture` + `accept` → `paid` → update DB + status `diproses`
+   - `expire` → `expired`
+   - `deny` / `cancel` / `failure` → `failed`
+5. Return 200 `processed`
 
 ---
 
-## Xendit Alternative
+## File Implementasi
 
-Jika memilih Xendit alih-alih Midtrans:
-
-### Create QRIS
-```php
-$response = Http::post('https://api.xendit.co/qr_codes', [
-    'reference_id' => $order->orderNumber,
-    'type' => 'DYNAMIC',
-    'currency' => 'IDR',
-    'amount' => $order->totalPrice,
-    'expires_at' => now()->addMinutes(15)->toIso8601String(),
-], [
-    'Authorization' => 'Basic ' . base64_encode($this->apiKey . ':'),
-]);
-```
-
-### Webhook
-Xendit mengirim callback ke URL yang dikonfigurasi di dashboard.
+| File | Deskripsi |
+|---|---|
+| `src/Infrastructure/Services/MidtransService.php` | HTTP client Midtrans: `chargeQris()`, `getStatus()`, `verifySignature()`, `mapPaymentStatus()`, `parseExpiry()` |
+| `src/Actions/Payment/GenerateQrisAction.php` | Handler `POST /api/payments/qris` |
+| `src/Actions/Payment/PaymentStatusAction.php` | Handler `GET /api/payments/qris/status` |
+| `src/Actions/Payment/PaymentWebhookAction.php` | Handler `POST /api/payments/webhook` |
 
 ---
 
-## QR Expiry
+## Catatan Penting: Timezone
 
-- QR code punya waktu expiry (default: **15 menit**)
-- Setelah expire, user harus generate ulang
-- Frontend harus tampilkan countdown timer
-- Backend harus reject payment untuk expired QR
+**WAJIB dibaca sebelum menyentuh kode payment.**
+
+PHP CLI default timezone di server dev = `Europe/Berlin`.
+MySQL/OS = GMT+8 (WITA). Midtrans mengembalikan `expiry_time` sebagai
+`"Y-m-d H:i:s"` dalam **WIB (Asia/Jakarta) tanpa offset**.
+
+Jangan pernah pakai `strtotime()` / `date()` langsung untuk waktu payment.
+Gunakan `MidtransService::parseExpiry()` yang parse sebagai Jakarta lalu simpan UTC.
+Frontend menerima ISO-8601 dengan offset (`->format('c')`) sehingga `new Date()` di browser selalu benar.
 
 ---
 
 ## Payment Status Flow
 
 ```
-Order Created (QRIS)
-  ↓ paymentStatus = 'pending'
+Order dibuat (QRIS)
+  ↓ payment_status = 'pending'
   ↓
-QR Generated → User scan & pay
+POST /api/payments/qris → Midtrans charge → QR tampil di browser
+  ↓ frontend polling tiap 5 detik via GET /api/payments/qris/status
   ↓
-Webhook: settlement
-  ↓ paymentStatus = 'paid', status = 'diproses'
+Customer scan & bayar
   ↓
-Order processing...
+Midtrans → POST /api/payments/webhook (settlement)
+  ↓ payment_status = 'paid', status = 'diproses'
+  ↓
+Frontend polling detect 'paid' → redirect /orders (1.4 detik)
 ```
 
 ```
-Order Created (Cash/COD)
-  ↓ paymentStatus = 'cod'
+Order dibuat (Cash)
+  ↓ payment_status = 'cod'
   ↓
-Admin konfirmasi terima pembayaran
+Admin konfirmasi pembayaran di admin panel
   ↓ status = 'diproses'
 ```
 
 ---
 
-## Frontend Integration
+## Payment Status Values
 
-Setelah backend payment ready, frontend perlu:
-
-1. **CheckoutPage**: Setelah `POST /api/orders`, call `POST /api/payments/qris`
-2. **PaymentQrisPage**: Tampilkan QR dari `qrImageUrl` response
-3. **Polling / WebSocket**: Check payment status berkala
-4. **Expiry handling**: Tampilkan timer, allow regenerate
-
-```js
-// Frontend pseudo-code
-const createPayment = async (orderId) => {
-  const res = await apiService.post('/payments/qris', { orderId })
-  return res.payment // { qrImageUrl, expiresAt, ... }
-}
-
-// Poll status every 3s
-const checkStatus = async (orderId) => {
-  const res = await apiService.get(`/orders/${orderId}`)
-  if (res.order.paymentStatus === 'paid') {
-    navigate('/orders')
-  }
-}
-```
+| Status | Keterangan |
+|---|---|
+| `pending` | QRIS belum dibayar |
+| `paid` | QRIS sudah dibayar (settlement) |
+| `cod` | Cash / bayar saat terima |
+| `expired` | QR kedaluwarsa (15 menit) |
+| `failed` | Pembayaran ditolak / dibatalkan |

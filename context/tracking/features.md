@@ -1,6 +1,7 @@
 # Feature Tracking
 
 > Status semua fitur: done, in progress, planned.
+> Terakhir update: 2026-06-01
 
 ---
 
@@ -19,51 +20,50 @@
 
 ### Core (P0 — Must Have)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Login customer | ✅ | 1 | Email + password |
-| Register customer | ✅ | 1 | 5 fields + validation |
-| Home page (landing) | ✅ | 2 | Hero banner + best seller |
-| Menu katalog | ✅ | 2 | 5 varian, grid layout |
-| Customize cake form | ✅ | 2 | Size, warna, tema, msg, qty |
-| Cart (add, edit, remove) | ✅ | 2 | Full CRUD |
-| Checkout form | ✅ | 3 | Pickup/delivery + payment |
-| QRIS payment page | ✅ | 3 | Simulasi QR |
-| Order history | ✅ | 3 | Protected route |
-| Guest checkout | ✅ | 3 | Tanpa login |
-| Cart merge (guest→user) | ✅ | 3 | Saat login/register |
+| Feature | Status | Catatan |
+|---|---|---|
+| Login customer | ✅ | JWT — token di localStorage |
+| Register customer | ✅ | 5 fields + validation |
+| Home page (landing) | ✅ | Hero banner + best seller dari API |
+| Menu katalog | ✅ | 5 varian, data dari API |
+| Customize cake form | ✅ | Size, warna, tema, msg, qty |
+| Cart (add, edit, remove) | ✅ | Full CRUD via API |
+| Checkout form | ✅ | Pickup/delivery + payment |
+| **QRIS payment page** | ✅ | **Real Midtrans QR, countdown, polling** |
+| Order history | ✅ | Protected route, data dari API |
+| Guest checkout | ✅ | Session token via X-Session-Token |
+| Cart merge (guest→user) | ✅ | Saat login/register |
+| Admin dashboard | ✅ | Stats, order management, product CRUD |
 
 ### Enhancement (P1 — Should Have)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Responsive design | ✅ | 3 | Mobile breakpoint 900px |
-| Loading states (spinners) | ⬜ | 8 | Setelah backend ready |
-| Error boundary | ⬜ | 8 | Network error handling |
-| Form auto-save draft | ⬜ | — | — |
-| Order status real-time | ⬜ | — | WebSocket/polling |
+| Feature | Status | Catatan |
+|---|---|---|
+| Responsive design | ✅ | Mobile breakpoint 900px |
+| Loading states | ✅ | Skeleton + spinner |
+| Polling payment status | ✅ | Tiap 5 detik, auto-redirect saat paid |
+| Auto-redirect setelah paid | ✅ | 1.4 detik setelah detect paid |
 
 ### Nice-to-Have (P2)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Image upload (cake reference) | ⬜ | — | Customer upload referensi |
-| Search & filter produk | ⬜ | — | — |
-| Skeleton loading | ⬜ | 8 | — |
-| Toast notifications | ⬜ | — | Sukses/error feedback |
-| Breadcrumb navigation | ⬜ | — | — |
+| Feature | Status | Catatan |
+|---|---|---|
+| Image upload (cake reference) | ⬜ | Customer upload referensi |
+| Search & filter produk | ⬜ | — |
+| Toast notifications | ⬜ | Sukses/error feedback |
+| Breadcrumb navigation | ⬜ | — |
+| Error boundary | ⬜ | Network error handling |
 
 ### Future (P3)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Dark mode | ⬜ | — | — |
-| PWA (offline + install) | ⬜ | — | — |
-| Multi-language (EN/ID) | ⬜ | — | — |
-| Wishlist | ⬜ | — | — |
-| Review/rating | ⬜ | — | — |
-| Promo banners (dynamic) | ⬜ | — | — |
-| Social login (Google) | ⬜ | — | — |
+| Feature | Status | Catatan |
+|---|---|---|
+| Dark mode | ⬜ | — |
+| PWA (offline + install) | ⬜ | — |
+| Multi-language (EN/ID) | ⬜ | — |
+| Wishlist | ⬜ | — |
+| Review/rating | ⬜ | — |
+| Social login (Google) | ⬜ | — |
 
 ---
 
@@ -71,49 +71,51 @@
 
 ### Core (P0 — Must Have)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Project setup (Slim + MySQL) | ⬜ | 4 | — |
-| Database migrations | ⬜ | 4 | 7 tables |
-| User registration (bcrypt) | ⬜ | 5 | — |
-| User login (JWT) | ⬜ | 5 | — |
-| Products API (list, detail) | ⬜ | 5 | — |
-| Cart API (CRUD) | ⬜ | 6 | — |
-| Order API (create, list, detail) | ⬜ | 6 | — |
-| Mark order as paid | ⬜ | 6 | — |
-| Cart merge (guest→user) | ⬜ | 6 | — |
-| QRIS payment gateway | ⬜ | 7 | Midtrans/Xendit |
-| Payment webhook | ⬜ | 7 | — |
+| Feature | Status | Catatan |
+|---|---|---|
+| Project setup (Slim PHP 4 + MySQL) | ✅ | slim/slim-skeleton |
+| Database migrations (9 files) | ✅ | Termasuk migration 009 Midtrans fields |
+| User registration (bcrypt) | ✅ | cost 12 |
+| User login (JWT) | ✅ | firebase/php-jwt |
+| Products API (list, detail) | ✅ | Featured filter + sizes |
+| Cart API (CRUD) | ✅ | User + guest session token |
+| Order API (create, list, detail) | ✅ | Snapshot items |
+| Cart merge (guest → user) | ✅ | Saat login/register |
+| **QRIS via Midtrans Core API** | ✅ | **Real charge, QR string EMV, reuse valid QR** |
+| **Payment status polling endpoint** | ✅ | **GET /api/payments/qris/status** |
+| **Payment webhook (Midtrans)** | ✅ | **Signature verified, idempotent, always 200** |
 
 ### Enhancement (P1)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Admin dashboard | ⬜ | 9+ | Web-based |
-| Admin: manage orders | ⬜ | 9+ | Status update |
-| Admin: manage products | ⬜ | 9+ | CRUD + image |
-| Image upload service | ⬜ | 9+ | — |
-| Rate limiting | ⬜ | 7 | Auth endpoints |
-| Logging & monitoring | ⬜ | 7 | — |
+| Feature | Status | Catatan |
+|---|---|---|
+| Admin dashboard API | ✅ | Stats: orders, revenue, customers |
+| Admin: manage orders | ✅ | Update status + payment status |
+| Admin: manage products | ✅ | Full CRUD + sizes |
+| Role-based auth (customer/admin) | ✅ | ENUM + AdminMiddleware |
+| CORS fix (ResponseEmitter) | ✅ | ngrok-skip-browser-warning diizinkan |
+| Rate limiting | ⬜ | Auth endpoints |
+| Logging & monitoring | ⬜ | Saat ini log ke file saja |
+| Image upload service | ⬜ | Foto produk |
 
 ### Nice-to-Have (P2)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Email notification | ⬜ | — | Order confirmation |
-| WhatsApp notification | ⬜ | — | Via API |
-| API documentation (Swagger) | ⬜ | — | — |
-| Automated tests | ⬜ | — | Unit + integration |
+| Feature | Status | Catatan |
+|---|---|---|
+| Email notification | ⬜ | Order confirmation |
+| WhatsApp notification | ⬜ | Via API |
+| API documentation (Swagger/Postman) | ⬜ | — |
+| Automated tests | ⬜ | Unit + integration |
 
 ### Future (P3)
 
-| Feature | Status | Sprint | Catatan |
-|---|---|---|---|
-| Analytics dashboard | ⬜ | — | Sales report |
-| Promo/discount system | ⬜ | — | Kupon |
-| Inventory management | ⬜ | — | Stock tracking |
-| Multi-outlet support | ⬜ | — | — |
-| Delivery tracking | ⬜ | — | Real-time location |
+| Feature | Status | Catatan |
+|---|---|---|
+| Real QRIS payment gateway (production) | ⬜ | Ganti `MIDTRANS_IS_PRODUCTION=true` |
+| Analytics dashboard | ⬜ | Sales report |
+| Promo/discount system | ⬜ | Kupon |
+| Inventory management | ⬜ | Stock tracking |
+| Delivery tracking | ⬜ | Real-time location |
 
 ---
 
@@ -128,7 +130,7 @@
 - [x] US-05: Tambah kue ke keranjang
 - [x] US-06: Edit pesanan di keranjang
 - [x] US-07: Checkout pickup/delivery
-- [x] US-08: Bayar via Cash/QRIS
+- [x] US-08: Bayar via Cash/QRIS (Midtrans real)
 - [x] US-09: Lihat riwayat order
 - [x] US-10: Order tanpa login (guest)
 - [x] US-11: Register dan login
@@ -138,14 +140,18 @@
 ### Customer (Planned)
 
 - [ ] US-14: Upload referensi gambar kue
-- [ ] US-15: Terima notifikasi status order
+- [ ] US-15: Terima notifikasi status order (email/WA)
 - [ ] US-16: Re-order dari history
 - [ ] US-17: Lihat estimasi waktu pengerjaan
 
+### Admin (Done)
+
+- [x] US-A1: Lihat daftar order masuk
+- [x] US-A2: Ubah status order
+- [x] US-A3: Kelola katalog produk (CRUD)
+- [x] US-A4: Lihat statistik penjualan (dashboard)
+
 ### Admin (Planned)
 
-- [ ] US-A1: Lihat daftar order masuk
-- [ ] US-A2: Ubah status order
-- [ ] US-A3: Kelola katalog produk
-- [ ] US-A4: Lihat laporan penjualan
 - [ ] US-A5: Kirim notifikasi ke customer
+- [ ] US-A6: Upload foto produk
