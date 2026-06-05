@@ -6,12 +6,23 @@ deny from all
 </Files>
 
 <IfModule mod_headers.c>
-    # Remove any CORS headers set by Apache server config to prevent duplicates
+    # Step 1: unset whatever Apache server config injected
     Header always unset Access-Control-Allow-Origin
     Header always unset Access-Control-Allow-Methods
     Header always unset Access-Control-Allow-Headers
     Header always unset Access-Control-Allow-Credentials
     Header always unset Access-Control-Max-Age
+
+    # Step 2: capture allowed origins from the request Origin header
+    SetEnvIf Origin "^(http://localhost:5173|http://localhost:3000|https://hanaka-store\.my\.id)$" CORS_ORIGIN=$0
+
+    # Step 3: set CORS headers — only fires when Origin matched above
+    Header always set Access-Control-Allow-Origin  "%{CORS_ORIGIN}e"                                              env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"                       env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Session-Token, ngrok-skip-browser-warning" env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Credentials "true"                                                     env=CORS_ORIGIN
+    Header always set Access-Control-Max-Age "86400"                                                              env=CORS_ORIGIN
+    Header always set Vary "Origin"
 </IfModule>
 
 <IfModule mod_rewrite.c>
