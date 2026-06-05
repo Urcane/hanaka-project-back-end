@@ -13,7 +13,13 @@ class CorsMiddleware implements Middleware
 {
     public function process(Request $request, RequestHandler $handler): Response
     {
-        $origin = $_ENV['CORS_ALLOWED_ORIGIN'] ?? 'http://localhost:5173';
+        $allowedOrigins = array_map(
+            'trim',
+            explode(',', $_ENV['CORS_ALLOWED_ORIGINS'] ?? 'http://localhost:5173')
+        );
+
+        $requestOrigin = $request->getHeaderLine('Origin');
+        $origin = in_array($requestOrigin, $allowedOrigins, true) ? $requestOrigin : $allowedOrigins[0];
 
         if ($request->getMethod() === 'OPTIONS') {
             $response = new \Slim\Psr7\Response();
