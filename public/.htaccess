@@ -5,6 +5,15 @@ order allow,deny
 deny from all
 </Files>
 
+<IfModule mod_headers.c>
+    # Remove any CORS headers set by Apache server config to prevent duplicates
+    Header always unset Access-Control-Allow-Origin
+    Header always unset Access-Control-Allow-Methods
+    Header always unset Access-Control-Allow-Headers
+    Header always unset Access-Control-Allow-Credentials
+    Header always unset Access-Control-Max-Age
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
