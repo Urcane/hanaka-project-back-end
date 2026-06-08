@@ -34,6 +34,7 @@ use App\Actions\Admin\DeleteProductAction;
 use App\Actions\Admin\CreateProductSizeAction;
 use App\Actions\Admin\UpdateProductSizeAction;
 use App\Actions\Admin\DeleteProductSizeAction;
+use App\Actions\Admin\UploadProductImageAction;
 use App\Middleware\AdminMiddleware;
 use App\Middleware\AuthRequiredMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -115,6 +116,7 @@ return function (App $app) {
             $admin->post('/products', CreateProductAction::class);
             $admin->put('/products/{productId}', UpdateProductAction::class);
             $admin->delete('/products/{productId}', DeleteProductAction::class);
+            $admin->post('/products/{productId}/image', UploadProductImageAction::class);
 
             // Product size management
             $admin->post('/products/{productId}/sizes', CreateProductSizeAction::class);
