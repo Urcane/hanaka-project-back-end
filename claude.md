@@ -1,5 +1,8 @@
 # Hanaka Cake — AI Assistant Context
 
+> ⚠️ **USANG (per 16 Juni 2026).** Dokumen ini hanya membahas frontend dan menyebut backend "direncanakan", padahal backend Slim PHP sudah selesai dibangun.
+> **Single source of truth terbaru: [`DOCUMENTATION.md`](./DOCUMENTATION.md)** (frontend + backend, kondisi aktual).
+
 > Dokumen ini adalah referensi utama bagi AI assistant (Claude, Copilot, dsb.) yang bekerja di repository Hanaka Cake.
 > Berisi ringkasan arsitektur, konvensi kode, business logic, dan instruksi penting agar setiap sesi bisa langsung produktif tanpa harus membaca ulang seluruh codebase.
 

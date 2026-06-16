@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Admin\Support\View;
 use App\Application\Settings\SettingsInterface;
 use App\Infrastructure\Services\JwtService;
 use App\Infrastructure\Services\MidtransService;
@@ -40,6 +41,11 @@ return function (ContainerBuilder $containerBuilder) {
 
         JwtMiddleware::class => function (ContainerInterface $c) {
             return new JwtMiddleware($c->get(JwtService::class));
+        },
+
+        // Server-rendered admin panel view renderer (plain PHP templates).
+        View::class => function () {
+            return new View(__DIR__ . '/../templates/admin');
         },
     ]);
 };

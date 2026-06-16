@@ -1,5 +1,8 @@
 # Hanaka Cake — Project Context & Development History
 
+> ⚠️ **USANG (per 16 Juni 2026).** Dokumen ini masih menyebut backend "belum dimulai", padahal backend sudah selesai dibangun penuh.
+> **Single source of truth terbaru: [`DOCUMENTATION.md`](./DOCUMENTATION.md).** Bagian di bawah dipertahankan hanya sebagai arsip ADR & history frontend.
+
 > Dokumen ini mencatat seluruh konteks project, keputusan arsitektur, development history, dan tracking progress untuk frontend maupun backend. Gunakan sebagai referensi utama sebelum memulai sesi development baru.
 
 ---

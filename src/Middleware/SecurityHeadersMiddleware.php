@@ -15,10 +15,18 @@ class SecurityHeadersMiddleware implements Middleware
     {
         $response = $handler->handle($request);
 
-        return $response
+        $response = $response
             ->withHeader('X-Content-Type-Options', 'nosniff')
-            ->withHeader('X-Frame-Options', 'DENY')
-            ->withHeader('X-XSS-Protection', '1; mode=block')
-            ->withHeader('Content-Type', 'application/json');
+            ->withHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->withHeader('X-XSS-Protection', '1; mode=block');
+
+        // Default to JSON for the API, but preserve an explicitly-set content type
+        // (e.g. text/html for the server-rendered admin panel).
+        $contentType = $response->getHeaderLine('Content-Type');
+        if ($contentType === '' || str_contains($contentType, 'application/json')) {
+            $response = $response->withHeader('Content-Type', 'application/json');
+        }
+
+        return $response;
     }
 }

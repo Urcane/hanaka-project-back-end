@@ -35,6 +35,12 @@ use App\Actions\Admin\CreateProductSizeAction;
 use App\Actions\Admin\UpdateProductSizeAction;
 use App\Actions\Admin\DeleteProductSizeAction;
 use App\Actions\Admin\UploadProductImageAction;
+use App\Admin\Controllers\CustomerController;
+use App\Admin\Controllers\DashboardController;
+use App\Admin\Controllers\OrderController;
+use App\Admin\Controllers\ProductController;
+use App\Admin\Controllers\SessionController;
+use App\Admin\Middleware\AdminAuthMiddleware;
 use App\Middleware\AdminMiddleware;
 use App\Middleware\AuthRequiredMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -124,4 +130,37 @@ return function (App $app) {
             $admin->delete('/products/{productId}/sizes/{sizeId}', DeleteProductSizeAction::class);
         })->add(AdminMiddleware::class);
     });
+
+    // ── Server-rendered Admin Panel (web, not /api) ──
+    // Admins log in on the React frontend, then get handed off here with their
+    // JWT. The panel renders PHP views and talks to the repositories directly.
+
+    // Auth handoff — outside the guard so the cookie can be (re)set / cleared.
+    $app->get('/admin/login', [SessionController::class, 'login']);
+    $app->get('/admin/logout', [SessionController::class, 'logout']);
+
+    $app->group('/admin', function (Group $admin) {
+        $admin->get('', function (Request $request, Response $response) {
+            return $response->withHeader('Location', '/admin/dashboard')->withStatus(302);
+        });
+
+        $admin->get('/dashboard', [DashboardController::class, 'index']);
+
+        // Orders
+        $admin->get('/orders', [OrderController::class, 'index']);
+        $admin->get('/orders/{orderId}', [OrderController::class, 'show']);
+        $admin->post('/orders/{orderId}/status', [OrderController::class, 'updateStatus']);
+        $admin->post('/orders/{orderId}/payment-status', [OrderController::class, 'updatePaymentStatus']);
+
+        // Customers
+        $admin->get('/customers', [CustomerController::class, 'index']);
+
+        // Products
+        $admin->get('/products', [ProductController::class, 'index']);
+        $admin->post('/products', [ProductController::class, 'store']);
+        $admin->post('/products/{productId}', [ProductController::class, 'update']);
+        $admin->post('/products/{productId}/delete', [ProductController::class, 'destroy']);
+        $admin->post('/products/{productId}/sizes', [ProductController::class, 'storeSize']);
+        $admin->post('/products/{productId}/sizes/{sizeId}/delete', [ProductController::class, 'destroySize']);
+    })->add(AdminAuthMiddleware::class);
 };
