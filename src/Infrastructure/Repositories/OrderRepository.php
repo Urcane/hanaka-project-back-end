@@ -309,6 +309,9 @@ class OrderRepository
             'id' => $row['id'],
             'orderNumber' => $row['order_number'],
             'userId' => $row['user_id'],
+            // NOTE: includes PII (customerName, customerPhone, deliveryAddress).
+            // Do NOT use this for public/unauthenticated endpoints — use
+            // formatTracking() instead.
             'customerName' => $row['customer_name'],
             'customerPhone' => $row['customer_phone'],
             'fulfillmentMethod' => $row['fulfillment_method'],
@@ -322,6 +325,35 @@ class OrderRepository
             'items' => $items,
             'totalPrice' => (int) $row['total_price'],
             'createdAt' => $row['created_at'],
+        ];
+    }
+
+    /**
+     * Public projection for the order-tracking endpoint. Deliberately omits all
+     * PII (customer name, phone, delivery address, notes) so the order number
+     * alone cannot expose personal data of whoever placed the order.
+     */
+    public static function formatTracking(array $row): array
+    {
+        $items = [];
+        foreach ($row['items'] ?? [] as $item) {
+            $items[] = [
+                'id' => $item['id'],
+                'productName' => $item['product_name'],
+                'sizeLabel' => $item['size_label'],
+                'quantity' => (int) $item['quantity'],
+                'totalPrice' => (int) $item['total_price'],
+            ];
+        }
+
+        return [
+            'orderNumber' => $row['order_number'],
+            'status' => $row['status'],
+            'paymentStatus' => $row['payment_status'],
+            'fulfillmentMethod' => $row['fulfillment_method'],
+            'totalPrice' => (int) $row['total_price'],
+            'createdAt' => $row['created_at'],
+            'items' => $items,
         ];
     }
 }

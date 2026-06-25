@@ -6,6 +6,7 @@ use App\Actions\Auth\LoginAction;
 use App\Actions\Auth\LogoutAction;
 use App\Actions\Auth\MeAction;
 use App\Actions\Auth\RegisterAction;
+use App\Actions\Auth\UpdateProfileAction;
 use App\Actions\Cart\AddCartItemAction;
 use App\Actions\Cart\ClearCartAction;
 use App\Actions\Cart\GetCartAction;
@@ -16,6 +17,7 @@ use App\Actions\Order\CreateOrderAction;
 use App\Actions\Order\GetOrderAction;
 use App\Actions\Order\ListOrdersAction;
 use App\Actions\Order\MarkOrderPaidAction;
+use App\Actions\Order\TrackOrderAction;
 use App\Actions\Payment\GenerateQrisAction;
 use App\Actions\Payment\PaymentStatusAction;
 use App\Actions\Payment\PaymentWebhookAction;
@@ -70,6 +72,7 @@ return function (App $app) {
             $auth->post('/login', LoginAction::class);
             $auth->post('/logout', LogoutAction::class)->add(AuthRequiredMiddleware::class);
             $auth->get('/me', MeAction::class)->add(AuthRequiredMiddleware::class);
+            $auth->put('/profile', UpdateProfileAction::class)->add(AuthRequiredMiddleware::class);
         });
 
         // Products (public)
@@ -91,6 +94,9 @@ return function (App $app) {
         // Orders
         $api->group('/orders', function (Group $orders) {
             $orders->post('', CreateOrderAction::class);
+            // Public order tracking — must be declared before /{orderId} so the
+            // literal "track" segment is matched before the wildcard.
+            $orders->get('/track', TrackOrderAction::class);
             $orders->get('', ListOrdersAction::class)->add(AuthRequiredMiddleware::class);
             $orders->get('/{orderId}', GetOrderAction::class);
             $orders->patch('/{orderId}/pay', MarkOrderPaidAction::class);

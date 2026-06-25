@@ -49,6 +49,30 @@ class UserRepository
         return $this->findById($id);
     }
 
+    public function findByPhoneExcept(string $phone, string $exceptId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT * FROM users WHERE phone = :phone AND id != :id LIMIT 1'
+        );
+        $stmt->execute(['phone' => $phone, 'id' => $exceptId]);
+        $user = $stmt->fetch();
+        return $user ?: null;
+    }
+
+    public function updateProfile(string $id, string $fullName, string $phone): ?array
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE users SET full_name = :full_name, phone = :phone WHERE id = :id'
+        );
+        $stmt->execute([
+            'full_name' => $fullName,
+            'phone' => $phone,
+            'id' => $id,
+        ]);
+
+        return $this->findById($id);
+    }
+
     public function findAllCustomers(): array
     {
         $stmt = $this->db->prepare("SELECT * FROM users WHERE role = 'customer' ORDER BY created_at DESC");

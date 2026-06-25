@@ -52,9 +52,31 @@ class AuthValidator extends Validator
         return $this->validate($data, $schema);
     }
 
+    public function validateProfile(array $data): array
+    {
+        $schema = [
+            'fullName' => [
+                ['type' => 'required', 'message' => 'Nama lengkap wajib diisi.'],
+                ['type' => 'minLength', 'min' => 3, 'message' => 'Nama lengkap minimal 3 karakter.'],
+                ['type' => 'maxLength', 'max' => 100, 'message' => 'Nama lengkap maksimal 100 karakter.'],
+            ],
+            'phone' => [
+                ['type' => 'required', 'message' => 'Nomor telepon wajib diisi.'],
+                ['type' => 'phoneId', 'message' => 'Masukkan nomor telepon Indonesia yang valid.'],
+            ],
+        ];
+
+        return $this->validate($data, $schema);
+    }
+
     public static function allowedRegisterFields(): array
     {
         return ['fullName', 'email', 'phone', 'password', 'confirmPassword'];
+    }
+
+    public static function allowedProfileFields(): array
+    {
+        return ['fullName', 'phone'];
     }
 
     public static function allowedLoginFields(): array
