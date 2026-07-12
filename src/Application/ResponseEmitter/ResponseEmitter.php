@@ -14,19 +14,10 @@ class ResponseEmitter extends SlimResponseEmitter
      */
     public function emit(ResponseInterface $response): void
     {
-        // This variable should be set to the allowed host from which your API can be accessed with
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-
-        $allowedOrigin = $_ENV['CORS_ALLOWED_ORIGIN'] ?? 'http://localhost:5173';
-
+        // CORS headers are owned solely by App\Middleware\CorsMiddleware, which
+        // honours the CORS_ALLOWED_ORIGINS whitelist. Do NOT set Access-Control-*
+        // headers here — doing so overwrites the middleware's per-origin value.
         $response = $response
-            ->withHeader('Access-Control-Allow-Credentials', 'true')
-            ->withHeader('Access-Control-Allow-Origin', $allowedOrigin)
-            ->withHeader(
-                'Access-Control-Allow-Headers',
-                'X-Requested-With, Content-Type, Accept, Origin, Authorization, X-Session-Token, ngrok-skip-browser-warning',
-            )
-            ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
             ->withHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->withAddedHeader('Cache-Control', 'post-check=0, pre-check=0')
             ->withHeader('Pragma', 'no-cache');

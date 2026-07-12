@@ -58,6 +58,10 @@ class SessionController extends Controller
     public function logout(Request $request, Response $response): Response
     {
         $response = Cookie::forget($response, Cookie::TOKEN, Cookie::isSecureRequest($request));
-        return $this->redirect($response, $this->frontendLoginUrl());
+        // Redirect to the frontend /logout route (not /login): the JWT is also
+        // kept in the React app's localStorage, and only that page can clear it.
+        // Landing straight on /login would let the still-present token re-hand
+        // the admin back into this panel, making logout appear to do nothing.
+        return $this->redirect($response, $this->frontendLogoutUrl());
     }
 }

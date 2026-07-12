@@ -80,7 +80,20 @@ abstract class Controller
      */
     protected function frontendLoginUrl(): string
     {
-        $base = rtrim($_ENV['FRONTEND_URL'] ?? 'http://localhost:5173', '/');
-        return $base . '/login';
+        return $this->frontendBaseUrl() . '/login';
+    }
+
+    /**
+     * URL of the React frontend logout route, which clears the JWT held in
+     * localStorage before returning the visitor to the login screen.
+     */
+    protected function frontendLogoutUrl(): string
+    {
+        return $this->frontendBaseUrl() . '/logout';
+    }
+
+    private function frontendBaseUrl(): string
+    {
+        return rtrim($_ENV['FRONTEND_URL'] ?? 'http://localhost:5173', '/');
     }
 }
