@@ -4,7 +4,7 @@
 > Dokumen ini menggantikan `claude.md`, `CLAUDE.md`, dan `context.md` yang sudah usang (ketiganya masih menyebut backend "direncanakan", padahal backend sudah selesai dibangun).
 > Dirancang agar siap dipakai sebagai bahan **PPT, laporan, proposal, atau dokumentasi teknis**.
 >
-> Terakhir diperbarui: **16 Juni 2026**
+> Terakhir diperbarui: **13 Agustus 2026**
 
 ---
 
@@ -20,6 +20,9 @@
 8. [Autentikasi & Keamanan](#8-autentikasi--keamanan)
 9. [Pembayaran QRIS (Midtrans)](#9-pembayaran-qris-midtrans)
 10. [Admin Panel (Server-Rendered)](#10-admin-panel-server-rendered)
+    - [10b. Owner Panel](#10b-owner-panel-server-rendered)
+    - [10c. Manajemen Stok](#10c-manajemen-stok)
+    - [10d. Progress & Peta Pesanan](#10d-progress--peta-pesanan)
 11. [Frontend — Struktur & Alur](#11-frontend--struktur--alur)
 12. [Alur Bisnis End-to-End](#12-alur-bisnis-end-to-end)
 13. [Status Fitur & Progress](#13-status-fitur--progress)
@@ -42,10 +45,13 @@ Project terdiri dari **dua repository**:
 
 **Yang membedakan kondisi terkini dari dokumen lama:** backend bukan lagi rencana — sudah terimplementasi penuh, mencakup:
 - **33+ Action classes** (REST API) untuk auth, produk, cart, order, payment, dan admin.
-- **9 migration** + 2 seeder (database relasional MySQL).
-- **Autentikasi JWT** dengan password ter-hash bcrypt (cost 12) + role customer/admin.
+- **13 migration** + 3 seeder (database relasional MySQL).
+- **Autentikasi JWT** dengan password ter-hash bcrypt (cost 12) + role customer/admin/**owner**.
 - **Pembayaran QRIS real** via Midtrans Core API (charge + webhook + polling status).
-- **Admin Panel server-rendered** (PHP murni, tanpa framework view) untuk kelola order, produk, dan customer.
+- **Admin Panel server-rendered** (PHP murni, tanpa framework view) untuk kelola order, produk, customer, dan **stok**.
+- **Owner Panel server-rendered** (`/owner/*`): laporan harian dengan filter tanggal, grafik SVG, peta sebaran order (Leaflet), dan pemberitahuan ke seluruh admin.
+- **Manajemen stok per ukuran** — admin menentukan kuota, pelanggan melihat sisa stok secara live di storefront.
+- **Progress & peta pesanan** — stepper status + minimap titik rute pada halaman lacak pesanan.
 
 ---
 
@@ -98,9 +104,9 @@ Project terdiri dari **dua repository**:
 └──────────────────────────┘         │     │                                │
                                       │     ├── /api/*  → Action classes     │
 ┌──────────────────────────┐         │     │            (thin controllers)  │
-│   ADMIN (browser)         │  HTML   │     │                                │
-│   Server-rendered panel   │ ◄─────► │     └── /admin/* → Admin Controllers │
-│   /admin/dashboard ...    │ cookie  │              (PHP views + layout)    │
+│  ADMIN & OWNER (browser)  │  HTML   │     │                                │
+│   Server-rendered panel   │ ◄─────► │     ├── /admin/* → Admin Controllers │
+│  /admin/*  ·  /owner/*    │ cookie  │            └── /owner/* → Owner Ctrl │
 └──────────────────────────┘         │                                      │
                                       │     Repositories → PDO → MySQL 8     │
        ┌─────────────────┐           │     Services: Jwt, Midtrans, Session  │
@@ -110,7 +116,7 @@ Project terdiri dari **dua repository**:
                                                      ▼
                                               ┌──────────────┐
                                               │   MySQL 8    │
-                                              │  7 tabel     │
+                                              │   9 tabel    │
                                               └──────────────┘
 ```
 
@@ -174,20 +180,27 @@ hanaka-project-back-end/
 │   │   ├── Store/            # GetProfile
 │   │   └── Admin/            # 13 action: dashboard, orders, customers, products, sizes, image
 │   ├── Admin/                 # ── Admin Panel server-rendered ──
-│   │   ├── Controllers/       # Session, Dashboard, Order, Product, Customer
+│   │   ├── Controllers/       # Session, Dashboard, Order, Product, Customer, Announcement
 │   │   ├── Middleware/        # AdminAuthMiddleware (cookie-based)
 │   │   └── Support/           # View (renderer), Cookie, Flash, helpers
+│   ├── Owner/                 # ── Owner Panel server-rendered ──
+│   │   ├── Controllers/       # Dashboard, Report, Announcement (+ base Controller)
+│   │   └── Middleware/        # OwnerAuthMiddleware (cookie yang sama, role owner)
+│   ├── Domain/Order/           # InsufficientStockException
 │   ├── Infrastructure/
 │   │   ├── Database.php        # PDO singleton
-│   │   ├── Repositories/       # User, Product, Cart, Order
+│   │   ├── Repositories/       # User, Product, Cart, Order, Announcement
 │   │   └── Services/           # Jwt, Midtrans, Session
 │   ├── Middleware/             # Cors, Jwt, AuthRequired, Admin, SecurityHeaders
 │   └── Validation/             # Validator, Auth, Cart, Checkout
 ├── database/
 │   ├── migrate.php             # Migration runner (--seed untuk seed data)
-│   ├── migrations/             # 001–009 (.sql)
-│   └── seeds/                  # products_seeder.sql, admin_seeder.sql
-├── templates/admin/            # PHP view (layout, dashboard, orders, products, customers)
+│   ├── migrations/             # 001–013 (.sql)
+│   └── seeds/                  # products_seeder.sql, admin_seeder.sql, owner_seeder.sql
+├── templates/
+│   ├── admin/                  # PHP view admin (layout, dashboard, orders, products, customers)
+│   └── owner/                  # PHP view owner (layout, dashboard, reports, announcements,
+│                               #   partials: sidebar, range-filter, bar-chart, donut-chart)
 └── tests/                      # PHPUnit (skeleton bawaan Slim)
 ```
 
@@ -199,29 +212,37 @@ hanaka-project-back-end/
 
 ## 6. Model Data (Database Schema)
 
-7 tabel inti + kolom tambahan (role, payment fields). Semua `id` berupa `VARCHAR` (ID berprefix dari aplikasi).
+9 tabel + kolom tambahan (role, payment fields, stok, koordinat antar). Semua `id` berupa `VARCHAR` (ID berprefix dari aplikasi).
 
 ```
-users ──┬─< carts ──< cart_items >── products ──< product_sizes
+users ──┬─< carts ──< cart_items >── products ──< product_sizes (stock)
         │                                  ^
-        └─< orders ──< order_items >────────┘
+        ├─< orders ──< order_items >────────┘
+        │
+        └─< announcements ──< announcement_reads >── users
 ```
 
 ### `users`
-`id`, `full_name`, `email` (unique), `phone`, `password_hash` (bcrypt), **`role`** ENUM(`customer`,`admin`), timestamps.
+`id`, `full_name`, `email` (unique), `phone`, `password_hash` (bcrypt), **`role`** ENUM(`customer`,`admin`,`owner`), timestamps.
 
 ### `products`
 `id`, `name`, `short_description`, `long_description`, `featured` (bool), `cover_gradient`, `cover_image`, `max_message_length` (default 60), timestamps.
 
 ### `product_sizes`
-`id`, `product_id` (FK), `label` (e.g. `16`), `full_label` (e.g. `Ukuran 16 cm`), `price` (INT, rupiah).
+`id`, `product_id` (FK), `label` (e.g. `16`), `full_label` (e.g. `Ukuran 16 cm`), `price` (INT, rupiah), **`stock`** (INT, kuota yang ditentukan admin), **`low_stock_threshold`** (INT, ambang badge "menipis").
+
+> **Desain penting:** stok melekat pada **ukuran**, bukan produk — 16 cm bisa habis sementara 20 cm masih tersedia, dan itulah yang dipilih pelanggan.
+
+### `announcements` & `announcement_reads`
+- `announcements`: `id`, `author_id` (FK users — owner), `title`, `body`, `priority` ENUM(`info`,`penting`), `created_at`.
+- `announcement_reads`: `announcement_id` + `user_id` (PK gabungan), `read_at`. Status "sudah dibaca" bersifat **per-admin**, jadi satu admin menutup banner tidak menyembunyikannya dari admin lain.
 
 ### `carts` & `cart_items`
 - `carts`: `id`, `user_id` (FK, nullable), `session_token` (untuk guest), timestamps.
 - `cart_items`: `cart_id` (FK), `product_id`, `size_id`, `color_text`, `theme`, `message`, `quantity`, `unit_price`, `total_price`.
 
 ### `orders`
-`id`, `order_number` (unique, format `HNK-YYYYMMDD-HHMMSS-XXX`), `user_id` (nullable), `session_token`, `customer_name`, `customer_phone`, `fulfillment_method` ENUM(`pickup`,`delivery`), `pickup_date`, `pickup_time`, `delivery_address`, `address_note`, `payment_method` ENUM(`cash`,`qris`), **`payment_status`** ENUM(`pending`,`paid`,`cod`,`expired`,`failed`), **`status`** ENUM(`menunggu konfirmasi`,`diproses`,`siap diambil`,`diantar`,`selesai`,`dibatalkan`), `total_price`, **payment fields** (`payment_provider`, `payment_reference`, `qr_string`, `qr_url`, `payment_expires_at`), timestamps.
+`id`, `order_number` (unique, format `HNK-YYYYMMDD-HHMMSS-XXX`), `user_id` (nullable), `session_token`, `customer_name`, `customer_phone`, `fulfillment_method` ENUM(`pickup`,`delivery`), `pickup_date`, `pickup_time`, `delivery_address`, **`delivery_lat`/`delivery_lng`** (DECIMAL(10,7), nullable — titik antar dari peta checkout), `address_note`, `payment_method` ENUM(`cash`,`qris`), **`payment_status`** ENUM(`pending`,`paid`,`cod`,`expired`,`failed`), **`status`** ENUM(`menunggu konfirmasi`,`diproses`,`siap diambil`,`diantar`,`selesai`,`dibatalkan`), `total_price`, **payment fields** (`payment_provider`, `payment_reference`, `qr_string`, `qr_url`, `payment_expires_at`), timestamps.
 
 ### `order_items`
 Snapshot item saat order dibuat: `order_id` (FK), `product_id`, `product_name`, `size_id`, `size_label`, `color_text`, `theme`, `message`, `quantity`, `unit_price`, `total_price`.
@@ -261,7 +282,8 @@ Base URL: `http://localhost:8080/api`
 ### Orders
 | Method | Path | Auth | Deskripsi |
 |---|---|---|---|
-| POST | `/orders` | — | Buat order dari cart (guest diizinkan) |
+| POST | `/orders` | — | Buat order dari cart (guest diizinkan). Menerima `deliveryLat`/`deliveryLng` opsional; **409** bila stok tidak mencukupi |
+| GET | `/orders/track?number=` | — | Lacak pesanan publik (tanpa PII, berisi status + titik antar) |
 | GET | `/orders` | JWT | Riwayat order user |
 | GET | `/orders/{id}` | — | Detail order |
 | PATCH | `/orders/{id}/pay` | — | Tandai sudah dibayar |
@@ -291,9 +313,11 @@ Base URL: `http://localhost:8080/api`
 | PUT | `/admin/products/{id}` | Update produk |
 | DELETE | `/admin/products/{id}` | Hapus produk |
 | POST | `/admin/products/{id}/image` | Upload foto produk |
-| POST | `/admin/products/{id}/sizes` | Tambah ukuran |
-| PUT | `/admin/products/{id}/sizes/{sizeId}` | Update ukuran |
+| POST | `/admin/products/{id}/sizes` | Tambah ukuran (`stock`, `lowStockThreshold` opsional) |
+| PUT | `/admin/products/{id}/sizes/{sizeId}` | Update ukuran, termasuk stok |
 | DELETE | `/admin/products/{id}/sizes/{sizeId}` | Hapus ukuran |
+
+> `GET /products` dan `GET /products/{id}` kini mengembalikan `stock`, `lowStockThreshold`, `inStock`, `lowStock` per ukuran, plus `totalStock` per produk. Frontend memakainya untuk menampilkan stok live.
 
 ---
 
@@ -304,6 +328,16 @@ Base URL: `http://localhost:8080/api`
 - Payload: `sub` (userId), `email`, `role`, `iat`, `exp`.
 - `JwtMiddleware` mendekode token dari header `Authorization: Bearer ...` dan menaruh data user ke request attribute (decode bersifat opsional — guard menolak yang benar wajib login).
 
+### Role
+
+| Role | Akses | Panel |
+|---|---|---|
+| `customer` | Storefront React (katalog, cart, checkout, riwayat) | — |
+| `admin` | Operasional harian: order, produk, stok, customer | `/admin/*` |
+| `owner` | Pandangan manajerial: laporan, grafik, peta, pemberitahuan | `/owner/*` |
+
+Ketiganya login lewat form yang sama di frontend React. Setelah login, `admin` dan `owner` diarahkan ke `GET /admin/login?token=<jwt>`; backend membaca `role` dari JWT lalu meneruskan ke panel yang sesuai. Salah masuk URL (admin membuka `/owner/*` atau sebaliknya) tidak menghasilkan halaman login, melainkan redirect ke panel miliknya sendiri.
+
 ### Guard Middleware
 | Middleware | Fungsi |
 |---|---|
@@ -312,13 +346,14 @@ Base URL: `http://localhost:8080/api`
 | `CorsMiddleware` | Header CORS |
 | `AuthRequiredMiddleware` | Tolak request tanpa login (401) |
 | `AdminMiddleware` | Tolak non-admin pada `/api/admin/*` (403) |
-| `AdminAuthMiddleware` (web) | Cek cookie JWT untuk panel `/admin/*` |
+| `AdminAuthMiddleware` (web) | Cek cookie JWT untuk panel `/admin/*`; owner dialihkan ke `/owner/dashboard` |
+| `OwnerAuthMiddleware` (web) | Cek cookie JWT untuk panel `/owner/*`; admin dialihkan ke `/admin/dashboard` |
 
 ### Password
-- Di-hash dengan **bcrypt cost 12** (`password_hash`). Admin default: `admin@hanakacake.com` / `Admin12345`.
+- Di-hash dengan **bcrypt cost 12** (`password_hash`). Admin default: `admin@hanakacake.com` / `Admin12345`. Owner default: `owner@hanakacake.com` / `Owner12345`.
 - (Berbeda dari frontend MVP lama yang menyimpan plain text di localStorage — di backend sudah aman.)
 
-> **Catatan teknis:** Sumber kebenaran CORS sebenarnya ada di `src/Application/ResponseEmitter/ResponseEmitter.php`, bukan hanya `CorsMiddleware`. Header `ngrok-skip-browser-warning` diizinkan untuk kebutuhan testing webhook lewat ngrok.
+> **Catatan teknis:** Sumber kebenaran CORS ada **sepenuhnya** di `src/Middleware/CorsMiddleware.php`, membaca whitelist `CORS_ALLOWED_ORIGINS` dari `.env`. `ResponseEmitter.php` dan `public/.htaccess` sudah **tidak** menyetel header `Access-Control-*` (dulu keduanya menimpa nilai middleware). Tambah origin cukup lewat `.env`. Header `ngrok-skip-browser-warning` diizinkan untuk testing webhook lewat ngrok.
 
 ---
 
@@ -355,9 +390,64 @@ Panel admin terpisah dari API — **HTML murni dirender PHP** (tanpa Twig/React)
 | `/admin/orders` | `OrderController@index` | Daftar order (filter) |
 | `/admin/orders/{id}` | `OrderController@show` | Detail order + update status & payment-status |
 | `/admin/customers` | `CustomerController@index` | Daftar customer |
-| `/admin/products` | `ProductController@index` | Kelola produk + sizes (CRUD, upload foto) |
+| `/admin/products` | `ProductController@index` | Kelola produk + sizes (CRUD, upload foto, **stok per ukuran**) |
 
 **Support classes:** `View` (renderer template + layout slot `{{ content }}`), `Cookie` (set/forget HttpOnly), `Flash` (pesan sekali tampil), `helpers.php`.
+
+**Banner pemberitahuan:** setiap halaman admin menampilkan pemberitahuan owner yang belum dibaca (`templates/admin/partials/announcements.php`), dengan tombol *Tandai dibaca* → `POST /admin/announcements/{id}/read`.
+
+---
+
+## 10b. Owner Panel (Server-Rendered)
+
+Panel terpisah di `/owner/*`, memakai renderer, cookie, dan CSS yang sama dengan admin panel (`public/assets/admin.css` + `public/assets/owner.css`), tetapi punya layout, sidebar, dan guard sendiri.
+
+| Route | Controller | Fungsi |
+|---|---|---|
+| `/owner/dashboard` | `DashboardController@index` | Ringkasan + progress + grafik + peta sebaran order |
+| `/owner/reports` | `ReportController@index` | Laporan harian dengan filter tanggal (`?from=&to=`) |
+| `/owner/reports/export` | `ReportController@export` | Unduh laporan rentang tanggal sebagai CSV |
+| `/owner/announcements` | `AnnouncementController@index/store/destroy` | Kirim & kelola pemberitahuan ke seluruh admin |
+
+**Isi dashboard owner:**
+- Kartu ringkas: pendapatan rentang, jumlah order, rata-rata per order, selesai, dibatalkan, pendapatan sepanjang waktu.
+- **Progress bar**: pencapaian target penjualan hari ini (`SALES_TARGET_DAILY` di `.env`) dan rasio order selesai pada rentang terpilih.
+- **Grafik**: bar chart pendapatan harian, donut status order, bar produk terlaris — semuanya **inline SVG murni**, tanpa library chart.
+- **Minimap titik**: peta Leaflet + OpenStreetMap berisi titik order delivery pada rentang tanggal, warna titik mengikuti status, popup berisi nomor order dan total.
+- Tabel stok yang perlu restock (`ProductRepository::findLowStock()`).
+
+**Query laporan** ada di `OrderRepository`: `getDailyReport()` (hari kosong tetap diisi nol agar sumbu grafik kontinu), `getRangeSummary()`, `getStatusBreakdown()`, `getPaymentMethodBreakdown()`, `getTopProducts()`, `getDeliveryPoints()`. Semua angka pendapatan memakai filter `payment_status IN ('paid','cod')`.
+
+---
+
+## 10c. Manajemen Stok
+
+**Alur:** admin menentukan kuota stok per ukuran di `/admin/products` → API produk mengirim angka itu ke frontend → pelanggan melihat sisa stok saat memilih ukuran → stok dipotong saat order dibuat → dikembalikan bila order dibatalkan.
+
+| Titik | Perilaku |
+|---|---|
+| `POST /api/cart/items` | Tolak (409) bila qty melebihi stok — penjagaan awal yang ramah |
+| `PUT /api/cart/items/{id}` & `PATCH .../quantity` | Cek ulang stok, termasuk saat pelanggan berpindah ukuran |
+| `POST /api/orders` | **Otoritatif**: stok dipotong di dalam transaksi yang sama dengan pembuatan order |
+| Status order → `dibatalkan` | Stok dikembalikan, hanya sekali (dijaga oleh status sebelumnya) |
+
+**Anti-minus:** `ProductRepository::decrementStock()` memakai `UPDATE ... SET stock = stock - :qty WHERE id = :id AND stock >= :qty` lalu memeriksa `rowCount()`. Dua checkout yang berebut stok terakhir: satu berhasil, satu gagal dengan `InsufficientStockException` → HTTP **409**, dan keranjang pelanggan tidak dikosongkan supaya bisa disesuaikan.
+
+**Live di storefront:** halaman kustomisasi menarik ulang `GET /api/products/{id}` tiap 20 detik (dan saat tab kembali fokus); halaman menu tiap 30 detik. Ukuran yang habis di-*disable*, tombol berubah jadi "Stok habis", dan batas qty mengikuti sisa stok.
+
+---
+
+## 10d. Progress & Peta Pesanan
+
+**Halaman Lacak Pesanan (`/lacak`, publik tanpa login):**
+- `OrderProgress` — stepper 4 langkah yang mengikuti alur pemenuhan: `menunggu konfirmasi → diproses → siap diambil|diantar → selesai`. Order `dibatalkan` ditampilkan sebagai jalur terhenti.
+- `DeliveryMiniMap` — peta Leaflet berisi marker toko, marker tujuan, garis putus-putus penghubung, dan satu titik **perkiraan posisi** yang diinterpolasi dari status pesanan.
+
+> **Penting untuk jujur ke pengguna:** titik posisi itu **estimasi dari status**, bukan GPS kurir. Sistem belum melacak posisi kurir secara real-time, dan label di UI menyatakan hal tersebut.
+
+**Sumber koordinat:** pelanggan menandai titik antar pada peta di halaman checkout (marker bisa digeser/diklik). Field ini **opsional** — order pickup dan order lama tanpa koordinat tetap valid, hanya tidak muncul di peta. Titik asal toko berasal dari `STORE_LAT`/`STORE_LNG` (`GET /api/store/profile`).
+
+**Privasi:** `OrderRepository::formatTracking()` mengekspos titik antar tetapi **tidak** nama, telepon, atau alamat tertulis — nomor order saja tidak boleh membocorkan data pribadi pemesan.
 
 ---
 
@@ -374,11 +464,26 @@ Panel admin terpisah dari API — **HTML murni dirender PHP** (tanpa Twig/React)
 | `/cart` | CartPage | — |
 | `/checkout` | CheckoutPage (`?mode=pickup\|delivery`) | — |
 | `/payment/:orderId` | PaymentQrisPage | — |
+| `/lacak` | TrackOrderPage (stepper + minimap titik) | — |
 | `/orders` | OrderHistoryPage | ProtectedRoute |
 | `/login`, `/register` | Auth | GuestRoute |
 
+**Komponen & service baru:**
+
+| File | Fungsi |
+|---|---|
+| `src/components/OrderProgress.jsx` | Stepper status pesanan |
+| `src/components/DeliveryMiniMap.jsx` | Minimap titik rute toko → tujuan + posisi estimasi |
+| `src/components/LocationPickerMap.jsx` | Pemilih titik antar di halaman checkout |
+| `src/utils/mapSetup.js` | Setup Leaflet sekali pakai (ikon marker, tile OSM, titik toko cadangan) |
+| `src/services/storeApi.js` | `GET /api/store/profile` (termasuk koordinat toko) |
+| `src/models/trackModel.js` | Logika langkah progress & rasio posisi estimasi (murni, tanpa React) |
+| `src/models/productModel.js` | Helper stok: `getSizeStock`, `isSizeAvailable`, `getMaxOrderableQuantity`, dll. |
+
 **Pola kunci frontend:**
-- **Model layer** murni di `src/models/` (auth, cart, checkout, order, product) — business logic terpisah dari komponen.
+- **Model layer** murni di `src/models/` (auth, cart, checkout, order, product, track) — business logic terpisah dari komponen.
+- **Leaflet dipakai langsung**, bukan react-leaflet: instance peta hidup di dalam `useRef` di luar siklus render, agar aman dengan React 19 + React Compiler dan tidak menambah dependensi.
+- **Polling stok** (20 dtk di halaman kustomisasi, 30 dtk di menu, plus saat tab kembali fokus) — bukan WebSocket, cukup untuk skala toko ini.
 - **Context split 3 file** (`appContextObject.js` + `useApp.js` + `AppContext.jsx`) demi ESLint `react-refresh/only-export-components` — **jangan diubah**.
 - **Custom validation framework** di `src/validation/customValidation.js` (tanpa Yup/Zod).
 - Migrasi dari localStorage → API: layer `storageService.js` akan diganti `apiService.js` (fetch + JWT).
@@ -388,16 +493,23 @@ Panel admin terpisah dari API — **HTML murni dirender PHP** (tanpa Twig/React)
 ## 12. Alur Bisnis End-to-End
 
 ```
-1. BROWSE     Customer lihat katalog (GET /products) → pilih produk
-2. CUSTOMIZE  Pilih ukuran, warna, tema, pesan (≤60 char), qty (1–5)
+1. BROWSE     Customer lihat katalog (GET /products) → stok tampil per produk
+2. CUSTOMIZE  Pilih ukuran (stok live, ukuran habis di-disable), warna, tema,
+              pesan (≤60 char), qty (1–5 dan ≤ sisa stok)
 3. CART       Tambah ke keranjang (POST /cart/items) — guest pakai X-Session-Token
-4. CHECKOUT   Isi data + pilih pickup/delivery + metode bayar (POST /orders)
+4. CHECKOUT   Isi data + pilih pickup/delivery + titik antar di peta + metode bayar
+              (POST /orders) → stok dipotong dalam transaksi yang sama
                  └─ order_number: HNK-YYYYMMDD-HHMMSS-XXX, status "menunggu konfirmasi"
+                 └─ stok kurang → 409, keranjang dibiarkan utuh
 5a. CASH      payment_status = cod → selesai di checkout
 5b. QRIS      POST /payments/qris → tampil QR → polling status
                  └─ webhook Midtrans → payment_status = paid
 6. FULFILL    Admin update status: diproses → siap diambil/diantar → selesai
-7. HISTORY    Customer login lihat riwayat (GET /orders)
+                 └─ dibatalkan → stok dikembalikan
+7. TRACK      Siapa pun lacak di /lacak: stepper status + minimap titik
+8. HISTORY    Customer login lihat riwayat (GET /orders)
+9. REPORT     Owner pantau di /owner: laporan harian, grafik, peta sebaran order,
+              dan kirim pemberitahuan ke seluruh admin
 ```
 
 **Merge cart guest → user:** saat login/register, cart guest (`session_token`) digabung ke cart user.
@@ -414,11 +526,14 @@ Panel admin terpisah dari API — **HTML murni dirender PHP** (tanpa Twig/React)
 | **Order** | Create, list, detail, mark paid, snapshot item | ✅ Selesai |
 | **Payment** | QRIS real (Midtrans charge + webhook + status) | ✅ Selesai |
 | **Admin API** | Dashboard, orders, customers, products, sizes, image | ✅ Selesai |
-| **Admin Panel** | Server-rendered (dashboard, order, produk, customer) | ✅ Selesai |
-| **Database** | 9 migration + seeder produk & admin | ✅ Selesai |
-| **Keamanan** | JWT, role guard, security headers, CORS | ✅ Selesai |
+| **Admin Panel** | Server-rendered (dashboard, order, produk, customer, stok) | ✅ Selesai |
+| **Owner Panel** | Dashboard, laporan + filter tanggal, export CSV, pemberitahuan | ✅ Selesai |
+| **Stok** | Kuota per ukuran, live di storefront, potong & kembalikan otomatis | ✅ Selesai |
+| **Progress & Peta** | Stepper status + minimap titik (Leaflet/OSM), peta sebaran owner | ✅ Selesai |
+| **Database** | 13 migration + seeder produk, admin & owner | ✅ Selesai |
+| **Keamanan** | JWT, role guard (customer/admin/owner), security headers, CORS | ✅ Selesai |
 | Notifikasi WA/Email | Status order ke customer | ⬜ Belum |
-| Analytics/Laporan | Laporan penjualan lanjutan | ⬜ Belum |
+| Tracking kurir real-time | Posisi kurir sebenarnya (saat ini estimasi dari status) | ⬜ Belum |
 | Promo/Diskon | Kupon, voucher | ⬜ Belum |
 | Unit test backend | Coverage action/repository | ⬜ Minim (skeleton) |
 
@@ -432,9 +547,9 @@ Panel admin terpisah dari API — **HTML murni dirender PHP** (tanpa Twig/React)
 - Unit & integration test backend (PHPUnit) untuk action & repository.
 
 **Prioritas menengah**
-- Laporan penjualan / analytics di admin panel.
 - Sistem promo/diskon (kupon).
-- Manajemen stok / inventory.
+- Tracking posisi kurir sungguhan (menggantikan titik estimasi di peta lacak pesanan).
+- Riwayat perubahan stok (audit siapa mengubah kuota, kapan).
 
 **Operasional / DevOps**
 - Deploy frontend (Netlify/Vercel) + backend (VPS/shared hosting).
@@ -451,12 +566,14 @@ composer install
 cp .env.example .env          # isi DB, JWT_SECRET, CORS, MIDTRANS_SERVER_KEY
 
 php database/migrate.php          # migration saja
-php database/migrate.php --seed   # migration + seed (produk + admin)
+php database/migrate.php --seed   # migration + seed (produk + admin + owner)
 
 composer start                # http://localhost:8080
 composer test                 # PHPUnit
 ```
-Admin default: `admin@hanakacake.com` / `Admin12345`.
+Akun bawaan: admin `admin@hanakacake.com` / `Admin12345` · owner `owner@hanakacake.com` / `Owner12345`.
+
+> Semua migration bersifat idempotent (dijaga lewat `INFORMATION_SCHEMA`), jadi `migrate.php` aman dijalankan berulang pada database yang sudah terisi. Seeder produk **tidak** idempotent — jalankan `--seed` hanya pada database baru, atau abaikan error duplicate key-nya.
 
 ### Frontend (repo terpisah)
 ```bash
@@ -468,6 +585,13 @@ npm run lint
 
 ### Variabel Environment Penting (`.env`)
 `DB_*`, `JWT_SECRET` (≥32 char), `JWT_EXPIRY`, `CORS_ALLOWED_ORIGIN`, `FRONTEND_URL`, `STORE_*`, `MIDTRANS_SERVER_KEY`, `MIDTRANS_IS_PRODUCTION`, `MIDTRANS_QRIS_ACQUIRER`.
+
+Tambahan untuk fitur peta & owner:
+
+| Variabel | Default | Fungsi |
+|---|---|---|
+| `STORE_LAT` / `STORE_LNG` | `-1.2654` / `116.8312` | Titik toko: pusat peta checkout, asal rute di peta lacak pesanan, marker toko di peta owner |
+| `SALES_TARGET_DAILY` | `1500000` | Target penjualan harian untuk progress bar dashboard owner |
 
 ---
 
@@ -484,8 +608,11 @@ Urutan slide yang siap dipakai untuk presentasi:
 7. **Model Data** — diagram relasi 7 tabel (§6).
 8. **Alur Pemesanan** — flow end-to-end (§12).
 9. **Pembayaran QRIS** — alur Midtrans (§9).
-10. **Admin Panel** — screenshot dashboard + kelola order/produk (§10).
-11. **Keamanan** — JWT, bcrypt, role guard (§8).
+10. **Admin Panel** — screenshot dashboard + kelola order/produk/stok (§10).
+11. **Owner Panel** — laporan harian + grafik + peta sebaran order + pemberitahuan (§10b).
+12. **Manajemen Stok** — kuota per ukuran, stok live di storefront (§10c).
+13. **Progress & Peta Pesanan** — stepper status + minimap titik (§10d).
+14. **Keamanan** — JWT, bcrypt, role guard customer/admin/owner (§8).
 12. **Status & Progress** — apa yang sudah selesai (§13).
 13. **Roadmap** — rencana lanjutan (§14).
 14. **Demo / Penutup** — link, kontak, Q&A.

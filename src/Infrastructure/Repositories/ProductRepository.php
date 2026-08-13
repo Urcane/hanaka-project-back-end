@@ -18,7 +18,8 @@ class ProductRepository
 
     public function findAll(?bool $featured = null): array
     {
-        $sql = 'SELECT p.*, ps.id AS size_id, ps.label AS size_label, ps.full_label AS size_full_label, ps.price AS size_price
+        $sql = 'SELECT p.*, ps.id AS size_id, ps.label AS size_label, ps.full_label AS size_full_label, ps.price AS size_price,
+                       ps.stock AS size_stock, ps.low_stock_threshold AS size_low_stock
                 FROM products p
                 LEFT JOIN product_sizes ps ON ps.product_id = p.id';
 
@@ -39,7 +40,8 @@ class ProductRepository
 
     public function findById(string $id): ?array
     {
-        $sql = 'SELECT p.*, ps.id AS size_id, ps.label AS size_label, ps.full_label AS size_full_label, ps.price AS size_price
+        $sql = 'SELECT p.*, ps.id AS size_id, ps.label AS size_label, ps.full_label AS size_full_label, ps.price AS size_price,
+                       ps.stock AS size_stock, ps.low_stock_threshold AS size_low_stock
                 FROM products p
                 LEFT JOIN product_sizes ps ON ps.product_id = p.id
                 WHERE p.id = :id
@@ -159,8 +161,8 @@ class ProductRepository
     {
         $sizeId = Database::generateId('sz');
         $stmt = $this->db->prepare(
-            'INSERT INTO product_sizes (id, product_id, label, full_label, price)
-             VALUES (:id, :product_id, :label, :full_label, :price)'
+            'INSERT INTO product_sizes (id, product_id, label, full_label, price, stock, low_stock_threshold)
+             VALUES (:id, :product_id, :label, :full_label, :price, :stock, :low_stock_threshold)'
         );
         $stmt->execute([
             'id' => $sizeId,
@@ -168,15 +170,16 @@ class ProductRepository
             'label' => $data['label'],
             'full_label' => $data['fullLabel'],
             'price' => (int) $data['price'],
+            'stock' => max(0, (int) ($data['stock'] ?? 0)),
+            'low_stock_threshold' => max(0, (int) ($data['lowStockThreshold'] ?? 5)),
         ]);
 
         $size = $this->findSizeById($sizeId);
-        return [
-            'id' => $size['id'],
-            'label' => $size['label'],
-            'fullLabel' => $size['full_label'],
-            'price' => (int) $size['price'],
-        ];
+        if ($size === null) {
+            throw new \RuntimeException('Ukuran gagal disimpan.');
+        }
+
+        return $this->formatSize($size);
     }
 
     public function updateSize(string $sizeId, array $data): ?array
@@ -196,10 +199,18 @@ class ProductRepository
             $fields[] = 'price = :price';
             $params['price'] = (int) $data['price'];
         }
+        if (array_key_exists('stock', $data)) {
+            $fields[] = 'stock = :stock';
+            $params['stock'] = max(0, (int) $data['stock']);
+        }
+        if (array_key_exists('lowStockThreshold', $data)) {
+            $fields[] = 'low_stock_threshold = :low_stock_threshold';
+            $params['low_stock_threshold'] = max(0, (int) $data['lowStockThreshold']);
+        }
 
         if (empty($fields)) {
             $size = $this->findSizeById($sizeId);
-            return $size ? ['id' => $size['id'], 'label' => $size['label'], 'fullLabel' => $size['full_label'], 'price' => (int) $size['price']] : null;
+            return $size ? $this->formatSize($size) : null;
         }
 
         $sql = 'UPDATE product_sizes SET ' . implode(', ', $fields) . ' WHERE id = :id';
@@ -207,7 +218,7 @@ class ProductRepository
         $stmt->execute($params);
 
         $size = $this->findSizeById($sizeId);
-        return $size ? ['id' => $size['id'], 'label' => $size['label'], 'fullLabel' => $size['full_label'], 'price' => (int) $size['price']] : null;
+        return $size ? $this->formatSize($size) : null;
     }
 
     public function deleteSize(string $sizeId): bool
@@ -215,6 +226,90 @@ class ProductRepository
         $stmt = $this->db->prepare('DELETE FROM product_sizes WHERE id = :id');
         $stmt->execute(['id' => $sizeId]);
         return $stmt->rowCount() > 0;
+    }
+
+    // ── Stock ──
+
+    /**
+     * Take `quantity` units off a size. The `stock >= :quantity` guard lives in
+     * the WHERE clause so two checkouts racing for the last cake can never drive
+     * stock negative — the loser simply updates 0 rows and gets false back.
+     */
+    public function decrementStock(string $sizeId, int $quantity): bool
+    {
+        if ($quantity <= 0) {
+            return true;
+        }
+
+        $stmt = $this->db->prepare(
+            'UPDATE product_sizes SET stock = stock - :quantity
+             WHERE id = :id AND stock >= :required'
+        );
+        $stmt->execute([
+            'id' => $sizeId,
+            'quantity' => $quantity,
+            'required' => $quantity,
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Put units back — used when an order is cancelled.
+     */
+    public function restoreStock(string $sizeId, int $quantity): void
+    {
+        if ($quantity <= 0) {
+            return;
+        }
+
+        $stmt = $this->db->prepare('UPDATE product_sizes SET stock = stock + :quantity WHERE id = :id');
+        $stmt->execute(['id' => $sizeId, 'quantity' => $quantity]);
+    }
+
+    /**
+     * Sizes at or below their low-stock threshold, newest shortage first.
+     * Feeds the owner dashboard's restock widget.
+     */
+    public function findLowStock(): array
+    {
+        $stmt = $this->db->query(
+            'SELECT ps.id, ps.stock, ps.low_stock_threshold, ps.full_label, p.name AS product_name
+             FROM product_sizes ps
+             JOIN products p ON p.id = ps.product_id
+             WHERE ps.stock <= ps.low_stock_threshold
+             ORDER BY ps.stock ASC, p.name ASC'
+        );
+
+        $rows = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $rows[] = [
+                'id' => $row['id'],
+                'productName' => $row['product_name'],
+                'fullLabel' => $row['full_label'],
+                'stock' => (int) $row['stock'],
+                'lowStockThreshold' => (int) $row['low_stock_threshold'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function formatSize(array $size): array
+    {
+        $stock = (int) ($size['stock'] ?? 0);
+        $threshold = (int) ($size['low_stock_threshold'] ?? 0);
+
+        return [
+            'id' => $size['id'],
+            'label' => $size['label'],
+            'fullLabel' => $size['full_label'],
+            'price' => (int) $size['price'],
+            'stock' => $stock,
+            'lowStockThreshold' => $threshold,
+            'inStock' => $stock > 0,
+            'lowStock' => $stock > 0 && $stock <= $threshold,
+        ];
     }
 
     public function countAll(): int
@@ -244,17 +339,26 @@ class ProductRepository
                     'maxMessageLength' => (int) $row['max_message_length'],
                     'sizes' => [],
                     'startingPrice' => null,
+                    'totalStock' => 0,
                 ];
             }
 
             if ($row['size_id'] !== null) {
                 $price = (int) $row['size_price'];
+                $stock = (int) ($row['size_stock'] ?? 0);
+                $threshold = (int) ($row['size_low_stock'] ?? 0);
                 $products[$index[$pid]]['sizes'][] = [
                     'id' => $row['size_id'],
                     'label' => $row['size_label'],
                     'fullLabel' => $row['size_full_label'],
                     'price' => $price,
+                    'stock' => $stock,
+                    'lowStockThreshold' => $threshold,
+                    'inStock' => $stock > 0,
+                    'lowStock' => $stock > 0 && $stock <= $threshold,
                 ];
+
+                $products[$index[$pid]]['totalStock'] += $stock;
 
                 $current = $products[$index[$pid]]['startingPrice'];
                 if ($current === null || $price < $current) {

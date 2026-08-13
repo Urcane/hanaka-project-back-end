@@ -4,9 +4,16 @@ declare(strict_types=1);
 
 use App\Admin\Support\View;
 use App\Application\Settings\SettingsInterface;
+use App\Infrastructure\Repositories\AnnouncementRepository;
+use App\Infrastructure\Repositories\OrderRepository;
+use App\Infrastructure\Repositories\ProductRepository;
+use App\Infrastructure\Repositories\UserRepository;
 use App\Infrastructure\Services\JwtService;
 use App\Infrastructure\Services\MidtransService;
 use App\Middleware\JwtMiddleware;
+use App\Owner\Controllers\AnnouncementController as OwnerAnnouncementController;
+use App\Owner\Controllers\DashboardController as OwnerDashboardController;
+use App\Owner\Controllers\ReportController as OwnerReportController;
 use DI\ContainerBuilder;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
@@ -46,6 +53,37 @@ return function (ContainerBuilder $containerBuilder) {
         // Server-rendered admin panel view renderer (plain PHP templates).
         View::class => function () {
             return new View(__DIR__ . '/../templates/admin');
+        },
+
+        // The owner panel shares the renderer but has its own template root
+        // (own layout + sidebar), so it needs a second View instance. Owner
+        // controllers are wired explicitly to receive this one.
+        'owner.view' => function () {
+            return new View(__DIR__ . '/../templates/owner');
+        },
+
+        OwnerDashboardController::class => function (ContainerInterface $c) {
+            return new OwnerDashboardController(
+                $c->get('owner.view'),
+                $c->get(OrderRepository::class),
+                $c->get(ProductRepository::class),
+                $c->get(UserRepository::class),
+                $c->get(AnnouncementRepository::class)
+            );
+        },
+
+        OwnerReportController::class => function (ContainerInterface $c) {
+            return new OwnerReportController(
+                $c->get('owner.view'),
+                $c->get(OrderRepository::class)
+            );
+        },
+
+        OwnerAnnouncementController::class => function (ContainerInterface $c) {
+            return new OwnerAnnouncementController(
+                $c->get('owner.view'),
+                $c->get(AnnouncementRepository::class)
+            );
         },
     ]);
 };

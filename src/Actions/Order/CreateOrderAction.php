@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Order;
 
 use App\Actions\BaseAction;
+use App\Domain\Order\InsufficientStockException;
 use App\Infrastructure\Repositories\CartRepository;
 use App\Infrastructure\Repositories\OrderRepository;
 use App\Infrastructure\Services\SessionService;
@@ -58,7 +59,13 @@ class CreateOrderAction extends BaseAction
         $data['userId'] = $identity['userId'];
         $data['sessionToken'] = $identity['sessionToken'];
 
-        $order = $this->orderRepo->create($data, $cartItems);
+        try {
+            $order = $this->orderRepo->create($data, $cartItems);
+        } catch (InsufficientStockException $e) {
+            // Stock ran out between adding to the cart and checking out — the
+            // cart is left intact so the customer can adjust it.
+            return $this->errorResponse($e->getMessage(), 409);
+        }
 
         // Clear cart after order
         $this->cartRepo->clearItems($cart['id']);

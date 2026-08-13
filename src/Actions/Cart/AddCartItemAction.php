@@ -51,6 +51,21 @@ class AddCartItemAction extends BaseAction
             ]);
         }
 
+        // Check stock. This is an early, friendly guard — the authoritative
+        // reservation happens when the order is created (OrderRepository::create).
+        $stock = (int) ($size['stock'] ?? 0);
+        $quantity = (int) $data['quantity'];
+        if ($stock <= 0) {
+            return $this->errorResponse('Stok ukuran ini sedang habis.', 409, [
+                'sizeId' => 'Stok ukuran ini sedang habis.',
+            ]);
+        }
+        if ($quantity > $stock) {
+            return $this->errorResponse("Stok ukuran ini tinggal {$stock}.", 409, [
+                'quantity' => "Stok ukuran ini tinggal {$stock}.",
+            ]);
+        }
+
         // Check message length against product's max
         if (!empty($data['message']) && mb_strlen($data['message']) > $product['maxMessageLength']) {
             return $this->errorResponse('Pesan terlalu panjang.', 400, [

@@ -227,6 +227,55 @@ input:focus, textarea:focus, select:focus {
 @keyframes admin-flash-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes admin-flash-out { to { opacity: 0; visibility: hidden; } }
 
+/* ── Owner announcements (shown to admins until dismissed) ── */
+.admin-announcement {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #cfe3d5;
+  border-left: 5px solid var(--success);
+  border-radius: var(--radius-md);
+  background: #f2fbf5;
+}
+
+.admin-announcement.is-important {
+  border-color: #f0c7b3;
+  border-left-color: var(--accent);
+  background: #fff4ec;
+}
+
+.admin-announcement-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-announcement-tag {
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success);
+  color: #fff;
+}
+
+.admin-announcement.is-important .admin-announcement-tag { background: var(--accent); }
+
+.admin-announcement-title { margin: 6px 0 4px; font-size: 1rem; }
+.admin-announcement-text { font-size: 0.9rem; color: var(--ink); }
+.admin-announcement form { flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .admin-announcement { flex-direction: column; }
+}
+
 /* ── Dashboard Stats ── */
 .admin-stats-grid {
   display: grid;
@@ -510,6 +559,32 @@ input:focus, textarea:focus, select:focus {
 
 .admin-size-row span:first-child { flex: 1; }
 .admin-size-row form { display: contents; }
+
+/* Inline stock editor — overrides the `display: contents` above so the number
+   inputs stay grouped instead of scattering across the row. */
+.admin-size-row .admin-stock-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-stock-form label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-stock-form input { width: 84px; padding: 6px 8px; font-size: 0.85rem; }
+.admin-stock-form .ghost-button { padding: 6px 10px; font-size: 0.8rem; }
+
+@media (max-width: 720px) {
+  .admin-size-row { flex-wrap: wrap; }
+}
 
 .admin-delete-size-btn {
   background: none;

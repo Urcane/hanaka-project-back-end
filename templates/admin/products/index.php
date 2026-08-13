@@ -48,6 +48,30 @@
                 <div class="admin-size-row">
                   <span><?= e($size['fullLabel']) ?></span>
                   <span><?= e(rupiah($size['price'])) ?></span>
+
+                  <?php if ($size['stock'] <= 0): ?>
+                    <span class="admin-badge badge-cancelled">Habis</span>
+                  <?php elseif (!empty($size['lowStock'])): ?>
+                    <span class="admin-badge badge-pending">Menipis</span>
+                  <?php else: ?>
+                    <span class="admin-badge badge-done">Tersedia</span>
+                  <?php endif; ?>
+
+                  <form class="admin-stock-form" method="post"
+                        action="/admin/products/<?= e(rawurlencode($product['id'])) ?>/sizes/<?= e(rawurlencode($size['id'])) ?>/stock">
+                    <label>
+                      Stok
+                      <input type="number" name="stock" min="0" value="<?= (int) $size['stock'] ?>"
+                             aria-label="Stok <?= e($size['fullLabel']) ?>">
+                    </label>
+                    <label>
+                      Batas menipis
+                      <input type="number" name="lowStockThreshold" min="0" value="<?= (int) $size['lowStockThreshold'] ?>"
+                             aria-label="Batas stok menipis <?= e($size['fullLabel']) ?>">
+                    </label>
+                    <button type="submit" class="ghost-button">Simpan</button>
+                  </form>
+
                   <form method="post" action="/admin/products/<?= e(rawurlencode($product['id'])) ?>/sizes/<?= e(rawurlencode($size['id'])) ?>/delete"
                         onsubmit="return confirm('Hapus ukuran ini?')">
                     <button type="submit" class="admin-delete-size-btn" aria-label="Hapus ukuran">✕</button>
@@ -122,6 +146,14 @@
             <label class="field">
               Harga (Rp)
               <input name="price" type="number" required>
+            </label>
+            <label class="field">
+              Stok Awal
+              <input name="stock" type="number" min="0" value="10" required>
+            </label>
+            <label class="field">
+              Batas Stok Menipis
+              <input name="lowStockThreshold" type="number" min="0" value="5" required>
             </label>
             <div class="admin-form-actions">
               <button type="submit" class="primary-button">Tambah</button>

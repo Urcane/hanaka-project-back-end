@@ -7,6 +7,7 @@
  * @var array  $currentUser
  * @var array|null $flash
  * @var string $logoutUrl
+ * @var array $announcements  Unread owner notices
  */
 ?><!DOCTYPE html>
 <html lang="id">
@@ -26,6 +27,9 @@
     <main class="admin-main">
       <?php if (!empty($flash)): ?>
         <?= $view->partial('partials/flash', ['flash' => $flash]) ?>
+      <?php endif; ?>
+      <?php if (!empty($announcements)): ?>
+        <?= $view->partial('partials/announcements', ['announcements' => $announcements]) ?>
       <?php endif; ?>
       <?= $content ?>
     </main>

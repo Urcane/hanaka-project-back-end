@@ -139,9 +139,42 @@ class ProductController extends Controller
             'label' => $label,
             'fullLabel' => $fullLabel,
             'price' => $price,
+            'stock' => (int) ($body['stock'] ?? 0),
+            'lowStockThreshold' => (int) ($body['lowStockThreshold'] ?? 5),
         ]);
 
         return $this->redirectWithFlash($request, $response, '/admin/products', 'success', 'Ukuran ditambahkan.');
+    }
+
+    /**
+     * POST /admin/products/{productId}/sizes/{sizeId}/stock
+     *
+     * Inline stock edit from the product list — the budget/quota an admin sets
+     * per size, which the storefront then shows to customers.
+     */
+    public function updateSizeStock(Request $request, Response $response, array $args): Response
+    {
+        $productId = (string) $args['productId'];
+        $sizeId = (string) $args['sizeId'];
+
+        if ($this->productRepo->findSizeByIdAndProduct($sizeId, $productId) === null) {
+            return $this->redirectWithFlash($request, $response, '/admin/products', 'error', 'Ukuran tidak ditemukan.');
+        }
+
+        $body = (array) $request->getParsedBody();
+        $stock = (int) ($body['stock'] ?? 0);
+        $threshold = (int) ($body['lowStockThreshold'] ?? 5);
+
+        if ($stock < 0 || $threshold < 0) {
+            return $this->redirectWithFlash($request, $response, '/admin/products', 'error', 'Stok tidak boleh negatif.');
+        }
+
+        $this->productRepo->updateSize($sizeId, [
+            'stock' => $stock,
+            'lowStockThreshold' => $threshold,
+        ]);
+
+        return $this->redirectWithFlash($request, $response, '/admin/products', 'success', 'Stok diperbarui.');
     }
 
     /**

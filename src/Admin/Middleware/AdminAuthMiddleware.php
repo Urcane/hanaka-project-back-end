@@ -36,12 +36,22 @@ class AdminAuthMiddleware implements Middleware
         $token = Cookie::read($request, Cookie::TOKEN);
         $payload = $token ? $this->jwtService->verifyToken($token) : null;
 
-        if ($payload === null || ($payload['role'] ?? '') !== 'admin') {
+        if ($payload === null) {
             return $this->bounceToLogin();
         }
 
         $user = $this->userRepo->findById((string) $payload['sub']);
-        if ($user === null || ($user['role'] ?? '') !== 'admin') {
+        if ($user === null) {
+            return $this->bounceToLogin();
+        }
+
+        $role = (string) ($user['role'] ?? '');
+        if ($role === 'owner') {
+            // Owners have their own panel — send them there instead of making a
+            // mistyped URL look like a failed login.
+            return $this->redirectTo('/owner/dashboard');
+        }
+        if ($role !== 'admin') {
             return $this->bounceToLogin();
         }
 
@@ -57,9 +67,14 @@ class AdminAuthMiddleware implements Middleware
     private function bounceToLogin(): \Psr\Http\Message\ResponseInterface
     {
         $base = rtrim($_ENV['FRONTEND_URL'] ?? 'http://localhost:5173', '/');
+        return $this->redirectTo($base . '/login');
+    }
+
+    private function redirectTo(string $location): \Psr\Http\Message\ResponseInterface
+    {
         $response = new Response();
         return $response
-            ->withHeader('Location', $base . '/login')
+            ->withHeader('Location', $location)
             ->withStatus(302);
     }
 }

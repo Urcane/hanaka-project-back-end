@@ -63,6 +63,15 @@ class UpdateCartItemAction extends BaseAction
             ]);
         }
 
+        // Switching size means checking the new size's stock, not the old one's.
+        $stock = (int) ($size['stock'] ?? 0);
+        if ((int) $data['quantity'] > $stock) {
+            $message = $stock > 0
+                ? "Stok ukuran ini tinggal {$stock}."
+                : 'Stok ukuran ini sedang habis.';
+            return $this->errorResponse($message, 409, ['quantity' => $message]);
+        }
+
         $data['unitPrice'] = $size['price'];
         $this->cartRepo->updateItem($itemId, $data);
 

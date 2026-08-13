@@ -35,8 +35,10 @@ class SessionController extends Controller
     {
         $token = (string) ($request->getQueryParams()['token'] ?? '');
         $payload = $token !== '' ? $this->jwtService->verifyToken($token) : null;
+        $role = (string) ($payload['role'] ?? '');
 
-        if ($payload === null || ($payload['role'] ?? '') !== 'admin') {
+        // Owners share this handoff route: one door, two destinations.
+        if ($payload === null || !in_array($role, ['admin', 'owner'], true)) {
             return $this->redirect($response, $this->frontendLoginUrl());
         }
 
@@ -49,7 +51,7 @@ class SessionController extends Controller
             Cookie::isSecureRequest($request)
         );
 
-        return $this->redirect($response, '/admin/dashboard');
+        return $this->redirect($response, $role === 'owner' ? '/owner/dashboard' : '/admin/dashboard');
     }
 
     /**

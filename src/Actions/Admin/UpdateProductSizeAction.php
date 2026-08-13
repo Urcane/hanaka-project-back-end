@@ -28,6 +28,19 @@ class UpdateProductSizeAction extends BaseAction
         }
 
         $body = $this->getBody();
+
+        $errors = [];
+        if (isset($body['stock']) && (!is_numeric($body['stock']) || (int) $body['stock'] < 0)) {
+            $errors['stock'] = 'Stok harus berupa angka 0 atau lebih.';
+        }
+        if (isset($body['lowStockThreshold'])
+            && (!is_numeric($body['lowStockThreshold']) || (int) $body['lowStockThreshold'] < 0)) {
+            $errors['lowStockThreshold'] = 'Batas stok menipis harus berupa angka 0 atau lebih.';
+        }
+        if (!empty($errors)) {
+            return $this->errorResponse('Data ukuran tidak valid.', 400, $errors);
+        }
+
         $updated = $this->productRepo->updateSize($sizeId, $body);
 
         return $this->successResponse([

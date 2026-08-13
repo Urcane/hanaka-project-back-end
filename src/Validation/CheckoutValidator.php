@@ -47,6 +47,15 @@ class CheckoutValidator extends Validator
             'addressNote' => [
                 ['type' => 'maxLength', 'max' => 120, 'message' => 'Catatan alamat maksimal 120 karakter.'],
             ],
+            // Optional drop-off point picked on the checkout map. An order
+            // without coordinates stays valid — it just does not appear on the
+            // tracking/owner maps.
+            'deliveryLat' => [
+                ['type' => 'floatBetween', 'min' => -90, 'max' => 90, 'message' => 'Titik lokasi tidak valid.'],
+            ],
+            'deliveryLng' => [
+                ['type' => 'floatBetween', 'min' => -180, 'max' => 180, 'message' => 'Titik lokasi tidak valid.'],
+            ],
             'paymentMethod' => [
                 ['type' => 'required', 'message' => 'Metode pembayaran wajib dipilih.'],
                 ['type' => 'oneOf', 'options' => ['cash', 'qris'], 'message' => 'Metode pembayaran harus cash atau qris.'],
@@ -58,6 +67,17 @@ class CheckoutValidator extends Validator
 
     public static function allowedFields(): array
     {
-        return ['customerName', 'phone', 'pickupMethod', 'pickupDate', 'pickupTime', 'address', 'addressNote', 'paymentMethod'];
+        return [
+            'customerName',
+            'phone',
+            'pickupMethod',
+            'pickupDate',
+            'pickupTime',
+            'address',
+            'addressNote',
+            'paymentMethod',
+            'deliveryLat',
+            'deliveryLng',
+        ];
     }
 }

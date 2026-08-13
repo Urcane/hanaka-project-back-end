@@ -37,12 +37,17 @@ use App\Actions\Admin\CreateProductSizeAction;
 use App\Actions\Admin\UpdateProductSizeAction;
 use App\Actions\Admin\DeleteProductSizeAction;
 use App\Actions\Admin\UploadProductImageAction;
+use App\Admin\Controllers\AnnouncementController as AdminAnnouncementController;
 use App\Admin\Controllers\CustomerController;
 use App\Admin\Controllers\DashboardController;
 use App\Admin\Controllers\OrderController;
 use App\Admin\Controllers\ProductController;
 use App\Admin\Controllers\SessionController;
 use App\Admin\Middleware\AdminAuthMiddleware;
+use App\Owner\Controllers\AnnouncementController as OwnerAnnouncementController;
+use App\Owner\Controllers\DashboardController as OwnerDashboardController;
+use App\Owner\Controllers\ReportController as OwnerReportController;
+use App\Owner\Middleware\OwnerAuthMiddleware;
 use App\Middleware\AdminMiddleware;
 use App\Middleware\AuthRequiredMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -161,6 +166,9 @@ return function (App $app) {
         // Customers
         $admin->get('/customers', [CustomerController::class, 'index']);
 
+        // Owner announcements — admins can only dismiss them, never author them.
+        $admin->post('/announcements/{announcementId}/read', [AdminAnnouncementController::class, 'markRead']);
+
         // Products
         $admin->get('/products', [ProductController::class, 'index']);
         $admin->post('/products', [ProductController::class, 'store']);
@@ -168,5 +176,25 @@ return function (App $app) {
         $admin->post('/products/{productId}/delete', [ProductController::class, 'destroy']);
         $admin->post('/products/{productId}/sizes', [ProductController::class, 'storeSize']);
         $admin->post('/products/{productId}/sizes/{sizeId}/delete', [ProductController::class, 'destroySize']);
+        $admin->post('/products/{productId}/sizes/{sizeId}/stock', [ProductController::class, 'updateSizeStock']);
     })->add(AdminAuthMiddleware::class);
+
+    // ── Server-rendered Owner Panel ──
+    // Same login handoff and cookie as the admin panel (see SessionController),
+    // but a separate guard, template root and navigation: the owner reads
+    // reports and broadcasts notices, never touches day-to-day operations.
+    $app->group('/owner', function (Group $owner) {
+        $owner->get('', function (Request $request, Response $response) {
+            return $response->withHeader('Location', '/owner/dashboard')->withStatus(302);
+        });
+
+        $owner->get('/dashboard', [OwnerDashboardController::class, 'index']);
+
+        $owner->get('/reports', [OwnerReportController::class, 'index']);
+        $owner->get('/reports/export', [OwnerReportController::class, 'export']);
+
+        $owner->get('/announcements', [OwnerAnnouncementController::class, 'index']);
+        $owner->post('/announcements', [OwnerAnnouncementController::class, 'store']);
+        $owner->post('/announcements/{announcementId}/delete', [OwnerAnnouncementController::class, 'destroy']);
+    })->add(OwnerAuthMiddleware::class);
 };

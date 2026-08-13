@@ -231,7 +231,7 @@ ngrok http 8080
 ## Catatan Teknis
 
 ### CORS
-Sumber kebenaran CORS ada di `src/Application/ResponseEmitter/ResponseEmitter.php` — bukan `CorsMiddleware`. Header yang diizinkan mencakup `ngrok-skip-browser-warning` untuk keperluan development.
+Sumber kebenaran CORS ada **sepenuhnya** di `src/Middleware/CorsMiddleware.php`, yang membaca whitelist `CORS_ALLOWED_ORIGINS` dari `.env` per-request. `ResponseEmitter.php` dan `public/.htaccess` **tidak lagi** menyetel header `Access-Control-*` (sebelumnya keduanya menimpa nilai middleware dan memblokir origin di luar daftar hardcoded). Untuk menambah origin, cukup edit `CORS_ALLOWED_ORIGINS` di `.env`. Header yang diizinkan mencakup `ngrok-skip-browser-warning` untuk keperluan development.
 
 ### Timezone
 `expiry_time` dari Midtrans adalah WIB (Asia/Jakarta) tanpa offset. Selalu gunakan `MidtransService::parseExpiry()` untuk parsing — jangan `strtotime()` langsung karena PHP default timezone bisa berbeda.

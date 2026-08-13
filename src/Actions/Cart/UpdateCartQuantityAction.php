@@ -55,6 +55,16 @@ class UpdateCartQuantityAction extends BaseAction
             return $this->errorResponse('Akses ditolak.', 403);
         }
 
+        // Never let the cart hold more than the shop actually has.
+        $size = $this->productRepo->findSizeById((string) $item['size_id']);
+        $stock = (int) ($size['stock'] ?? 0);
+        if ((int) $data['quantity'] > $stock) {
+            $message = $stock > 0
+                ? "Stok ukuran ini tinggal {$stock}."
+                : 'Stok ukuran ini sedang habis.';
+            return $this->errorResponse($message, 409, ['quantity' => $message]);
+        }
+
         $this->cartRepo->updateItemQuantity($itemId, (int) $data['quantity'], (int) $item['unit_price']);
 
         // Get formatted item

@@ -120,6 +120,20 @@ class Validator
                 }
                 break;
 
+            case 'floatBetween':
+                // minNumber/maxNumber cast to int, which mangles coordinates
+                // (-1.2654 becomes -1). This keeps the decimals.
+                if ($value !== null && $value !== '') {
+                    if (!is_numeric($value)) {
+                        return $message;
+                    }
+                    $number = (float) $value;
+                    if ($number < (float) $rule['min'] || $number > (float) $rule['max']) {
+                        return $message;
+                    }
+                }
+                break;
+
             case 'when':
                 $predicate = $rule['predicate'];
                 $innerRule = $rule['rule'];

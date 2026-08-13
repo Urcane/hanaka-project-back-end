@@ -38,6 +38,13 @@ class CreateProductSizeAction extends BaseAction
         if (!isset($body['price']) || !is_numeric($body['price']) || (int) $body['price'] <= 0) {
             $errors['price'] = 'Harga wajib diisi dan harus lebih dari 0.';
         }
+        if (isset($body['stock']) && (!is_numeric($body['stock']) || (int) $body['stock'] < 0)) {
+            $errors['stock'] = 'Stok harus berupa angka 0 atau lebih.';
+        }
+        if (isset($body['lowStockThreshold'])
+            && (!is_numeric($body['lowStockThreshold']) || (int) $body['lowStockThreshold'] < 0)) {
+            $errors['lowStockThreshold'] = 'Batas stok menipis harus berupa angka 0 atau lebih.';
+        }
 
         if (!empty($errors)) {
             return $this->errorResponse('Data ukuran tidak valid.', 400, $errors);

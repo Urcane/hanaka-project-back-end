@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Infrastructure\Repositories\AnnouncementRepository;
 use App\Infrastructure\Repositories\CartRepository;
 use App\Infrastructure\Repositories\OrderRepository;
 use App\Infrastructure\Repositories\ProductRepository;
@@ -14,5 +15,6 @@ return function (ContainerBuilder $containerBuilder) {
         ProductRepository::class => \DI\autowire(ProductRepository::class),
         CartRepository::class => \DI\autowire(CartRepository::class),
         OrderRepository::class => \DI\autowire(OrderRepository::class),
+        AnnouncementRepository::class => \DI\autowire(AnnouncementRepository::class),
     ]);
 };

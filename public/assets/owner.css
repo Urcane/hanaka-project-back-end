@@ -1,0 +1,261 @@
+/* ===================================================================
+   Hanaka Owner — panel styles
+   Loaded on top of admin.css: same tokens, same shell, extra pieces for
+   charts, progress bars and the delivery map.
+   =================================================================== */
+
+.owner-sidebar { background: #2f2018; }
+.owner-role-tag {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d8b79c;
+  margin-bottom: 8px;
+}
+
+/* ── Panels ── */
+.owner-panel {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 14px;
+}
+
+.owner-panel h2 {
+  font-family: 'Fraunces', 'Times New Roman', serif;
+  font-size: 1.05rem;
+}
+
+.owner-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.owner-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* ── Date range filter ── */
+.owner-range {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.owner-range .field { gap: 4px; font-size: 0.85rem; }
+.owner-range input[type="date"] { width: auto; min-width: 150px; }
+
+.owner-range-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.owner-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.owner-chip:hover { border-color: var(--accent); color: var(--accent); }
+.owner-chip.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.owner-chip.is-export { border-style: dashed; }
+
+/* ── Progress bars ── */
+.owner-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.owner-progress { display: grid; gap: 8px; }
+
+.owner-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.owner-progress-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(99, 61, 40, 0.12);
+  overflow: hidden;
+}
+
+.owner-progress-track.is-slim { height: 8px; }
+
+.owner-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+  transition: width 0.4s ease;
+}
+
+.owner-progress-fill.is-secondary {
+  background: linear-gradient(90deg, #4caf7d, var(--success));
+}
+
+.owner-progress-caption { font-size: 0.82rem; }
+
+/* ── Bar chart ── */
+.owner-chart { display: grid; gap: 6px; }
+.owner-chart svg { width: 100%; height: 180px; display: block; }
+.owner-bar { fill: var(--accent); opacity: 0.85; }
+.owner-bar:hover { opacity: 1; }
+
+.owner-chart-axis {
+  display: grid;
+  grid-template-columns: repeat(var(--chart-slots, 1), 1fr);
+  font-size: 0.66rem;
+  color: var(--muted);
+  text-align: center;
+  gap: 0;
+  overflow: hidden;
+}
+
+.owner-chart-axis span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.owner-chart-empty { padding: 24px 0; text-align: center; font-size: 0.9rem; }
+
+/* ── Donut chart ── */
+.owner-donut {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.owner-donut svg { width: 100%; height: auto; }
+.owner-donut-track { stroke: rgba(99, 61, 40, 0.1); }
+
+.owner-donut-value {
+  font-family: 'Fraunces', serif;
+  font-size: 6px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: var(--ink);
+}
+
+.owner-donut-caption {
+  font-size: 2.6px;
+  text-anchor: middle;
+  fill: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.owner-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.owner-legend li { display: flex; align-items: center; gap: 8px; }
+.owner-legend-label { color: var(--muted); flex: 1; }
+
+.owner-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.owner-legend-inline {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  justify-content: start;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+
+/* ── Delivery map ── */
+.owner-map {
+  height: 380px;
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  z-index: 0;
+}
+
+/* ── Ranked list (top products) ── */
+.owner-rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.owner-rank-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+/* ── Announcements ── */
+.owner-announcement-form { max-width: 620px; }
+.owner-announcement-form select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fffefb;
+  color: var(--ink);
+}
+
+.owner-announcement-list { display: grid; gap: 12px; }
+
+.owner-announcement-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--success);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.owner-announcement-item.is-important { border-left-color: var(--accent); }
+.owner-announcement-item h3 { margin: 6px 0 4px; font-size: 1rem; }
+.owner-announcement-item form { flex-shrink: 0; }
+
+.owner-status-table { margin-top: 12px; }
+
+@media (max-width: 900px) {
+  .owner-donut { grid-template-columns: 1fr; }
+  .owner-range-presets { margin-left: 0; }
+  .owner-announcement-item { flex-direction: column; }
+}
